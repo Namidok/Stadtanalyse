@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      API_MEMORY_MODE: "1"
+      ML_MODEL_PATH: /app/ml/model/model.joblib
+      ML_FEATURES_PATH: /app/ml/model/features.json
+    volumes:
+      - ./data/local:/app/data/local:ro
+      - ./ml/model:/app/ml/model:ro
+    ports:
+      - "127.0.0.1:8005:8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: web
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3002:80"
+    depends_on:
+      - api
+    restart: unless-stopped

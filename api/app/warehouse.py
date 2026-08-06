@@ -30,7 +30,9 @@ class WarehouseProvider:
             if now - self._last_check < _TTL:
                 return
             self._last_check = now
-            if self._mode != "memory" and self._pg.ping():
+            if settings()["force_memory_mode"]:
+                self._mode = "memory"
+            elif self._pg.ping():
                 self._mode = "postgres"
                 log.info("Warehouse mode: postgres (gold marts)")
             else:

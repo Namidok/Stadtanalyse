@@ -32,6 +32,7 @@ def settings() -> dict:
         "ml_features_path": os.environ.get("ML_FEATURES_PATH", "/opt/ml/model/features.json"),
         "cors_origins": os.environ.get("API_CORS_ORIGINS", "*"),
         "force_memory_mode": os.environ.get("API_MEMORY_MODE", "0") == "1",
+        "data_source": os.environ.get("STADTANALYSE_DATA_SOURCE", "synthetic"),
     }
 
 

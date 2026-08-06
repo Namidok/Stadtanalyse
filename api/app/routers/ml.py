@@ -24,6 +24,7 @@ class PredictRequest(BaseModel):
 
 @router.get("/info")
 def info():
+    model.ensure_loaded()
     return model.info()
 
 

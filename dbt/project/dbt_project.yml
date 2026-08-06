@@ -25,16 +25,14 @@ models:
     staging:
       +schema: staging
       +materialized: view
+    raw:
+      +schema: gold_silver
+      +materialized: view
     marts:
       +schema: gold
       +materialized: table
       dims:
         +materialized: table
-
-seeds:
-  stadtanalyse:
-    +schema: silver
-    +quote_columns: false
 
 data_tests:
   stadtanalyse:

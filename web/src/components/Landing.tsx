@@ -1,4 +1,4 @@
-import type { Kpis } from "../api";
+import type { DataSource, Kpis } from "../api";
 import { NumberTicker } from "./NumberTicker";
 
 const FEATURES: Array<{ icon: string; title: string; desc: string; accent: string }> = [
@@ -60,11 +60,18 @@ function Stat({ value, suffix, label, decimals }: { value: number; suffix: strin
   );
 }
 
-export function Landing({ kpis, live, vehicles, city, onEnter }: { kpis: Kpis | null; live: boolean; vehicles: number; city?: string; onEnter: () => void }) {
+export function Landing({ kpis, live, vehicles, city, dataSource, onEnter }: { kpis: Kpis | null; live: boolean; vehicles: number; city?: string; dataSource: DataSource | null; onEnter: () => void }) {
   return (
     <div className="landing">
       <div className="land-hero">
-        <div className="land-badge">{live ? <span className="pill-live">LIVE · KAFKA STREAM{city ? ` · ${city.toUpperCase()}` : ""}</span> : <span className="pill-snap">DEMO SNAPSHOT</span>}</div>
+        <div className="land-badge">
+          {live ? <span className="pill-live">LIVE · KAFKA STREAM{city ? ` · ${city.toUpperCase()}` : ""}</span> : <span className="pill-snap">DEMO SNAPSHOT</span>}
+          {dataSource && (
+            <span className={`pill-source ${dataSource.mode === "real" ? "real" : "synth"}`} title={dataSource.detail}>
+              {dataSource.label}
+            </span>
+          )}
+        </div>
         <div className="land-mark">
           <svg viewBox="0 0 24 24" width="34" height="34">
             <g fill="currentColor">
@@ -137,8 +144,9 @@ export function Landing({ kpis, live, vehicles, city, onEnter }: { kpis: Kpis | 
           ))}
         </div>
         <p className="land-flow-note">
-          Simulators push transit, weather and event streams to Kafka. Raw events land in the MinIO Bronze lake, Spark refines them to Silver, dbt models Gold,
-          and Postgres serves the FastAPI backend and this dashboard. A scheduled Airflow DAG re-runs ETL, quality checks, and the ML retrain.
+          {dataSource?.mode === "real"
+            ? "Real German transit data: the national gtfs.de network is extracted per city and live GTFS-RT delays from realtime.gtfs.de stream into Kafka. Vehicle positions are simulated along the real routes. Raw events land in the MinIO Bronze lake, Spark refines them to Silver, dbt models Gold, and Postgres serves the FastAPI backend and this dashboard."
+            : "Simulators push transit, weather and event streams to Kafka. Raw events land in the MinIO Bronze lake, Spark refines them to Silver, dbt models Gold, and Postgres serves the FastAPI backend and this dashboard. A scheduled Airflow DAG re-runs ETL, quality checks, and the ML retrain."}
         </p>
       </div>
 

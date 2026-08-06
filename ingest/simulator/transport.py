@@ -85,6 +85,7 @@ class TransportSimulator(BaseSimulator):
         self.weather_state = {"condition": "clear", "precip": 0.0, "wind": 8.0, "temp": 15.0}
         self.event_state: dict = {}
         self._last_trip_emissions: dict[str, int] = {}
+        self.emit_trip_updates = True
 
     # ------------------------------------------------------------------ setup
     @staticmethod
@@ -96,19 +97,37 @@ class TransportSimulator(BaseSimulator):
         stop_rows = read_csv("stops.txt")
         route_rows = read_csv("routes.txt")
         trips_rows = read_csv("trips.txt")
-        stop_times = read_csv("stop_times.txt")
 
         stops = {
             r["stop_id"]: Stop(r["stop_id"], r["stop_name"], float(r["stop_lat"]), float(r["stop_lon"]), r["stop_zone"])
             for r in stop_rows
         }
+
+        # Build trip -> ordered stop list in a single pass over stop_times.txt
+        # (the real national feed has ~1.3M rows per city, so per-route scans
+        # would be quadratic and unusable).
+        trip_stops: dict[str, list[tuple[int, str]]] = {}
+        with (gtfs_dir / "stop_times.txt").open() as f:
+            for st in csv.DictReader(f):
+                trip_stops.setdefault(st["trip_id"], []).append(
+                    (int(st["stop_sequence"]), st["stop_id"])
+                )
+        for seqs in trip_stops.values():
+            seqs.sort()
+
+        trips_by_route: dict[str, list[dict]] = {}
+        for t in trips_rows:
+            trips_by_route.setdefault(t["route_id"], []).append(t)
+
         routes: dict[str, Route] = {}
         for r in route_rows:
-            ordered = sorted([st for st in stop_times if st["trip_id"] == trips_rows[0]["trip_id"]], key=lambda x: int(x["stop_sequence"]))
-            # build stop order from first trip on the route
-            rt = next((t for t in trips_rows if t["route_id"] == r["route_id"] and t["direction_id"] == "0"), trips_rows[0])
-            seq = sorted([st for st in stop_times if st["trip_id"] == rt["trip_id"]], key=lambda x: int(x["stop_sequence"]))
-            stop_list = [stops[st["stop_id"]] for st in seq]
+            rt = next((t for t in trips_by_route.get(r["route_id"], []) if t["direction_id"] == "0"), None)
+            if rt is None:
+                rt = trips_by_route.get(r["route_id"], [None])[0]
+            seq = trip_stops.get(rt["trip_id"], []) if rt else []
+            stop_list = [stops[sid] for _, sid in seq]
+            if len(stop_list) < 2:
+                continue
             routes[r["route_id"]] = Route(
                 route_id=r["route_id"],
                 mode=r["route_mode"],
@@ -225,23 +244,24 @@ class TransportSimulator(BaseSimulator):
             if v.progress >= 1.0:
                 # passed the stop -> emit trip update + advance segment
                 passed = v.route.stops[v.stop_index]
-                delay = round(v.delay_seconds, 1)
-                scheduled = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                sink(
-                    "trip_updates",
-                    {
-                        "trip_id": v.trip_id,
-                        "route_id": v.route.route_id,
-                        "vehicle_id": v.vehicle_id,
-                        "stop_id": passed.stop_id,
-                        "stop_sequence": v.stop_index,
-                        "scheduled_arrival_utc": scheduled,
-                        "actual_arrival_utc": (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat(timespec="seconds"),
-                        "delay_seconds": delay,
-                        "status": "EARLY" if delay < -60 else ("ON_TIME" if delay <= 120 else "DELAYED"),
-                        "event_ts": now,
-                    },
-                )
+                if self.emit_trip_updates:
+                    delay = round(v.delay_seconds, 1)
+                    scheduled = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    sink(
+                        "trip_updates",
+                        {
+                            "trip_id": v.trip_id,
+                            "route_id": v.route.route_id,
+                            "vehicle_id": v.vehicle_id,
+                            "stop_id": passed.stop_id,
+                            "stop_sequence": v.stop_index,
+                            "scheduled_arrival_utc": scheduled,
+                            "actual_arrival_utc": (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat(timespec="seconds"),
+                            "delay_seconds": delay,
+                            "status": "EARLY" if delay < -60 else ("ON_TIME" if delay <= 120 else "DELAYED"),
+                            "event_ts": now,
+                        },
+                    )
                 v.stop_index = (v.stop_index + 1) % (len(v.route.stops) - 1)
                 v.progress = 0.0
                 # small chance of break-down -> big delay spike for realism

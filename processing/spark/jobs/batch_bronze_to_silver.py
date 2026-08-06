@@ -83,7 +83,7 @@ def clean_weather(spark: SparkSession):
             .otherwise(F.lit("unknown")),
         )
         .withColumn("temperature_c", F.col("temperature_c").cast(DoubleType()))
-        .withColumn("dqr_valid", F.col("temperature_c").isNotNull() & F.col("condition") != "unknown")
+        .withColumn("dqr_valid", F.col("temperature_c").isNotNull() & (F.col("condition") != "unknown"))
         .withColumn("processed_ts", F.current_timestamp())
     )
     n = cleaned.count()

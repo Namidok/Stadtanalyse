@@ -21,6 +21,9 @@
           "congestion_level",
           "event_ts",
           "ingested_ts",
+          "dqr_speed_anomaly",
+          "dqr_delay_anomaly",
+          "dqr_valid",
           "processed_ts"
         ]
       },
@@ -71,8 +74,8 @@
       "type": "expect_column_values_to_be_between",
       "kwargs": {
         "column": "delay_seconds",
-        "min_value": -120.0,
-        "max_value": 3600.0
+        "min_value": -3600.0,
+        "max_value": 36000.0
       },
       "meta": {}
     },

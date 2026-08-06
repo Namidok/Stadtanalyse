@@ -18,4 +18,5 @@ exec spark-submit \
   --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
   --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-  jobs/train_delay_model.py --test-size 0.2
+  --py-files jobs/common.py \
+  ml_train/train_delay_model.py --test-size 0.2

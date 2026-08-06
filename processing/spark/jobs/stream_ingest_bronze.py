@@ -90,6 +90,7 @@ TOPICS = [
 def main():
     spark = build_session("stadtanalyse-stream-bronze", streaming=True)
 
+    queries = []
     for topic, schema_key, table in TOPICS:
         schema = SCHEMAS[schema_key]
         log.info("Starting stream %s -> %s", topic, s3_path(table))
@@ -114,6 +115,9 @@ def main():
             .trigger(processingTime="10 seconds")
             .start(s3_path(table))
         )
+        queries.append(query)
+
+    for query in queries:
         query.awaitTermination()
 
 

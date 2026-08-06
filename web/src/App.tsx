@@ -4,6 +4,7 @@ import {
   positionsStream,
   type City,
   type CityEvent,
+  type DataSource,
   type Hotspot,
   type Kpis,
   type PipelineStatus,
@@ -52,7 +53,7 @@ function PanelHead({ title, hint }: { title: string; hint?: string }) {
 
 function CityPicker({ cities, city, disabled, onSelect }: { cities: City[]; city: City | null; disabled: boolean; onSelect: (name: string) => void }) {
   return (
-    <label className="city-picker" title="Switch simulated city">
+    <label className="city-picker" title="Switch city">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
@@ -65,6 +66,15 @@ function CityPicker({ cities, city, disabled, onSelect }: { cities: City[]; city
         ))}
       </select>
     </label>
+  );
+}
+
+function DataSourceBadge({ source }: { source: DataSource | null }) {
+  if (!source) return null;
+  return (
+    <span className={`pill-source ${source.mode === "real" ? "real" : "synth"}`} title={source.detail}>
+      {source.label}
+    </span>
   );
 }
 
@@ -84,6 +94,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
   const [city, setCity] = useState<City | null>(null);
+  const [dataSource, setDataSource] = useState<DataSource | null>(null);
   const [switching, setSwitching] = useState(false);
   const liveRef = useRef(false);
 
@@ -125,6 +136,7 @@ export default function App() {
   useEffect(() => {
     api.cities().then((c) => setCities(c.cities)).catch(() => {});
     api.cityCurrent().then((c) => setCity(c)).catch(() => {});
+    api.dataSource().then(setDataSource).catch(() => {});
   }, []);
 
   const switchCity = useCallback(async (name: string) => {
@@ -166,7 +178,7 @@ export default function App() {
   const vehicles = positions.length || kpis?.vehicles_tracked || 0;
 
   if (view === "landing") {
-    return <Landing kpis={kpis} live={live} vehicles={vehicles} city={city?.name} onEnter={() => setView("overview")} />;
+    return <Landing kpis={kpis} live={live} vehicles={vehicles} city={city?.name} dataSource={dataSource} onEnter={() => setView("overview")} />;
   }
 
   const title = TITLES[view];
@@ -184,6 +196,7 @@ export default function App() {
           </div>
           <div className="spacer" />
           <CityPicker cities={cities} city={city} disabled={switching} onSelect={switchCity} />
+          <DataSourceBadge source={dataSource} />
           {live ? <span className="pill-live">LIVE STREAM</span> : <span className="pill-snap">warehouse snapshot</span>}
           <span className="clock">{lastSync}</span>
           <Clock />

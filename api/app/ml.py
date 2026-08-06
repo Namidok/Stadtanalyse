@@ -51,7 +51,14 @@ class DelayModel:
             "features": self.features if self.loaded else None,
         }
 
+    def ensure_loaded(self) -> None:
+        """Retry loading the artifacts. The model is trained by the batch
+        pipeline after the API starts, so the file may not exist yet."""
+        if not self.loaded and self.error and "not found" in self.error:
+            self._load()
+
     def predict(self, features: dict) -> dict:
+        self.ensure_loaded()
         if not self.loaded:
             return {"loaded": False, "error": self.error or "model unavailable"}
         cat = self.features.get("cat_features", [])

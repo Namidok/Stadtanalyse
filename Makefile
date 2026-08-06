@@ -19,8 +19,21 @@ up: ## Start the full platform (Kafka, MinIO, Postgres, Spark, API, Web, Airflow
 up-lite: ## Start only the demo-facing services (Kafka, MinIO, Postgres, producer, API, Web)
 	docker compose --profile ingest up -d --build kafka kafka-init minio minio-init postgres producer api web spark-streaming
 
-jobs: ## Run batch pipeline once: silver ETL -> quality -> gold (dbt) -> model
-	docker compose up --build spark-run quality dbt ml-train
+up-real: ## Start the demo stack on REAL German transit data (gtfs.de GTFS + GTFS-RT delays)
+	SIM_REAL_NETWORK=1 SIM_POSITIONS_ONLY=1 STADTANALYSE_DATA_SOURCE=real \
+	docker compose --profile ingest --profile realtime up -d --build kafka kafka-init minio minio-init postgres producer realtime api web spark-streaming
+
+jobs: ## Run batch pipeline once: GTFS static -> silver ETL -> quality -> gold (dbt) -> model
+	@echo "== 1/5 GTFS static -> PostgreSQL =="
+	docker compose --profile jobs run --rm --build spark-run /opt/spark/work-dir/scripts/entrypoint.sh load_gtfs_static.py
+	@echo "== 2/5 Bronze -> Silver (Spark batch) =="
+	docker compose --profile jobs run --rm spark-run
+	@echo "== 3/5 Data quality (Great Expectations) =="
+	docker compose --profile jobs run --rm --build quality
+	@echo "== 4/5 dbt -> gold marts =="
+	docker compose --profile jobs run --rm --build dbt
+	@echo "== 5/5 Train delay model =="
+	docker compose --profile jobs run --rm --build ml-train
 
 seed: ## Generate GTFS static feed + local DuckDB demo snapshot
 	.venv/bin/python scripts/gen_gtfs.py && .venv/bin/python -m ingest.producer.run --local

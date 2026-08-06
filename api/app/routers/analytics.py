@@ -10,7 +10,7 @@ def hotspots(limit: int = Query(25, ge=1, le=100)):
     """Congestion hotspots ranked by average delay."""
     return provider.rows(
         """
-        SELECT grid_cell, lat, lon, avg_delay_seconds, avg_speed_kmh,
+        SELECT grid_cell, cell_lat AS lat, cell_lon AS lon, avg_delay_seconds, avg_speed_kmh,
                avg_congestion, vehicles, severe_pct, congestion_rank
         FROM gold.mart_congestion_hotspots
         ORDER BY congestion_rank

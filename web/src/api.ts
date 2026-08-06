@@ -140,6 +140,12 @@ export interface CityCatalog {
   current: string;
 }
 
+export interface DataSource {
+  mode: "real" | "synthetic";
+  label: string;
+  detail: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
@@ -171,6 +177,7 @@ export const api = {
   cities: () => get<CityCatalog>("/api/v1/cities"),
   cityCurrent: () => get<City>("/api/v1/cities/current"),
   switchCity: (name: string) => post<{ ok: boolean; city: City }>("/api/v1/cities/switch", { city: name }),
+  dataSource: () => get<DataSource>("/api/v1/data-source"),
 };
 
 export function positionsStream(onPositions: (p: VehiclePosition[]) => void, onError: () => void): () => void {

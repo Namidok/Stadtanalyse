@@ -29,3 +29,24 @@ sources:
         columns:
           - name: event_id
             tests: [not_null]
+
+  - name: gtfs_raw
+    description: "Per-city GTFS static network loaded into PostgreSQL by the Spark GTFS loader (real gtfs.de feed)."
+    schema: gtfs_raw
+    tables:
+      - name: gtfs_stops
+        columns:
+          - name: stop_id
+            tests: [not_null]
+      - name: gtfs_stop_times
+        columns:
+          - name: trip_id
+            tests: [not_null]
+      - name: gtfs_trips
+        columns:
+          - name: trip_id
+            tests: [not_null]
+      - name: gtfs_routes
+        columns:
+          - name: route_id
+            tests: [not_null]

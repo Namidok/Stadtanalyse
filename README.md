@@ -6,7 +6,12 @@
 
 A production-style, end-to-end data engineering platform that ingests **real-time transit, weather, and city-event** data, cleanses and organizes it into a **Delta Lake medallion architecture**, runs **data-quality checks**, builds **analytical marts** with **dbt**, retrains an **XGBoost delay-prediction model**, and serves everything through a **FastAPI + React** dashboard — all orchestrated by **Airflow** and monitored with **Prometheus + Grafana**.
 
-> Demo city: **Berlin**. The entire pipeline runs locally with Docker Compose (no cloud credentials needed).
+The platform runs in two modes:
+
+- **Real data** (`make up-real`) — demo city **Berlin**. The real [gtfs.de](https://www.gtfs.de) national GTFS network plus **live GTFS-RT delays** from `realtime.gtfs.de` flow through Kafka → Bronze → Silver → quality → Gold → the XGBoost model. Vehicle *positions* are simulated on the real network (GTFS-RT exposes trip delays, not GPS positions); the UI labels the data source accordingly.
+- **Fully synthetic** (`make up`) — self-contained demo with simulated network, positions, weather and events, plus the full Airflow cluster, no real feeds needed.
+
+Everything runs locally with Docker Compose (no cloud credentials).
 
 ---
 
@@ -55,7 +60,7 @@ flowchart LR
 | **Bronze** | Spark Structured Streaming → Delta Lake on MinIO | Immutable raw records from 4 Kafka topics: `raw.transport.vehicle.positions`, `raw.transport.trip.updates`, `raw.weather.observations`, `raw.city.events` |
 | **Silver** | Spark batch ETL | Dedup, bounds/sanity filtering, type casting, `dqr_*` data-quality flags; exported to Delta + Parquet (MinIO) and loaded to PostgreSQL `silver` schema |
 | **Quality** | Great Expectations | Versioned suites (one per table) run against the Silver exports; results published to `quality.quality_runs` |
-| **Gold** | dbt | Staging views → dims/facts → marts: `route_reliability`, `delay_trends`, `congestion_hotspots`, `weather_impact`, `events_impact`, `ml_features` |
+| **Gold** | dbt | Raw GTFS views (`gold_silver` schema) → staging views → dims/facts → marts: `route_reliability`, `delay_trends`, `congestion_hotspots`, `weather_impact`, `events_impact`, `ml_features` |
 | **Serve** | FastAPI + React | `/api/v1` reads gold marts (falls back to live-stream memory aggregations so the demo is never empty); the ML endpoint serves the trained model |
 
 ## Repository layout
@@ -63,18 +68,18 @@ flowchart LR
 ```
 ├── ingest/               data simulators + Kafka producer (Docker)
 │   ├── simulator/        transport / weather / city-events simulators
+│   ├── realtime/         real GTFS + GTFS-RT download, extract & poller (real mode)
 │   └── producer/         Kafka sink, run entrypoint
 ├── processing/spark/     Spark jobs + image (Delta Lake, S3A, JDBC)
 ├── quality/              Great Expectations suites + runner
-├── dbt/                  dbt project (staging → gold marts) + profiles
+├── dbt/                  dbt project (raw → staging → gold marts) + profiles
 ├── ml/                   XGBoost delay-model training + artifacts
 ├── api/                  FastAPI service (warehouse + live stream + ML)
 ├── web/                  React dashboard (Vite + Leaflet + Recharts)
-├── airflow/dags/         batch-pipeline orchestration DAG
+├── airflow/dags/         batch-pipeline orchestration DAG (full mode only)
 ├── monitoring/           Prometheus config + Grafana provisioning
 ├── db/init/              PostgreSQL schema bootstrap
-├── scripts/              GTFS static-feed generator
-└── data/                 city profile, GTFS feed, local DuckDB snapshot
+└── data/                 city profile, GTFS static feed, local DuckDB snapshot
 ```
 
 ## Quick start
@@ -83,7 +88,29 @@ flowchart LR
 - Docker Desktop (macOS) with **at least 4 GB memory** allocated
 - Python 3.11+ for the optional local-only path
 
-### 1. Full platform (recommended)
+### 1a. Real-data platform (recommended, demo Berlin)
+
+```bash
+cp .env.example .env        # optional, sensible defaults are baked in
+make up-real                # builds & starts the real-data stack (no Airflow)
+make jobs                   # once: GTFS static → silver → quality → gold → ml-train
+```
+
+`make up-real` starts Kafka, MinIO, Spark (streaming + jobs in `local[4]` mode),
+PostgreSQL, the API and the web dashboard, plus the `realtime` service which
+downloads the national GTFS feed, extracts the Berlin network, and polls the
+live GTFS-RT delay feed every 10 seconds.
+
+`make jobs` runs the batch pipeline **sequentially** (concurrent runs race):
+1. **GTFS static load** — `load_gtfs_static.py` imports the real Berlin network
+   (`stops` 15 000+, `stop_times` ~3.9 M, `routes`, `trips`) into Postgres `gtfs_raw`.
+2. **Bronze → Silver** — Spark batch ETL on the live-ingested real records.
+3. **Quality** — Great Expectations suites against the Silver exports.
+4. **dbt** — builds `gold_silver` raw views → staging → Gold marts.
+5. **ml-train** — trains the XGBoost delay model on `gold.ml_features` and saves
+   artifacts to the `ml_artifacts` volume the API serves.
+
+### 1b. Full platform (synthetic, with Airflow)
 
 ```bash
 cp .env.example .env        # optional, sensible defaults are baked in
@@ -99,12 +126,14 @@ make up                     # builds & starts the whole stack
 | Kafka UI | http://localhost:8081 | — |
 | MinIO console | http://localhost:9001 | stadtanalyse / stadtanalyse-secret |
 
-### 2. Generate & inject demo data
+### 2. Generate & inject demo data (synthetic mode only)
 
 ```bash
 make seed     # generate GTFS feed + local DuckDB snapshot
 make ingest   # start the simulators producing to Kafka (streaming)
 ```
+
+Real mode needs no seeding — the `realtime` service downloads and installs the real feed on first start (data source badge on the dashboard shows **REAL GTFS + REALTIME DELAYS**).
 
 ### 3. Run the batch pipeline (once)
 
@@ -130,16 +159,16 @@ Without Kafka/Postgres the API automatically seeds from the local DuckDB snapsho
 
 ## Batch pipeline detail
 
-`silver → quality → gold → retrain` is expressed both as a Makefile target (`make jobs`) and as an Airflow DAG (`airflow/dags/stadtanalyse_batch_pipeline.py`). Airflow runs each step in its own container (the same compose-built images) attached to the `stadtanalyse_default` network via the Docker daemon socket.
+`silver → quality → gold → retrain` is expressed as a Makefile target (`make jobs`) and, in the full synthetic mode, as an Airflow DAG (`airflow/dags/stadtanalyse_batch_pipeline.py`). In real mode the steps run sequentially via `docker compose --profile jobs run --rm`, and `spark-streaming` runs in `local[4]` mode (no cluster), continuously consuming Kafka into Bronze.
 
 ## ML: delay prediction
 
-`ml/train/train_delay_model.py` trains two artifacts from the `gold.ml_features` table:
+Trained on real GTFS-RT delays from the `gold.ml_features` table (via `processing/spark/scripts/run_train.sh` / `ml_train/train_delay_model.py`):
 
 - **Regressor** — predicted delay in seconds (R² metric)
 - **Classifier** — `on_time` / `delayed` / `severe` bucket with probabilities
 
-Features include route mode, weather condition, rush-hour flag, segment length, event proximity, and historical average delay. The API serves both models at `POST /api/v1/ml/predict`; the dashboard includes a live prediction panel.
+Features include route mode, weather condition, rush-hour flag, segment length, event proximity, and historical average delay. The API serves both models at `POST /api/v1/ml/predict`; the dashboard includes a live prediction panel. Model artifacts live in the `ml_artifacts` volume, which the API mounts at `/opt/ml/model`.
 
 ## Observability
 
@@ -153,6 +182,7 @@ Features include route mode, weather condition, rush-hour flag, segment length, 
 
 ## Possible extensions
 
-- Swap the simulators for real GTFS-RT feeds / Open-Meteo (URLs + key hooks already in `.env.example`)
+- Extend real mode to more cities (Hamburg, München, … are already in `data/cities.json`; the GTFS loader + batch job take the city from `data/gtfs/.city`)
+- Add GTFS-RT VehiclePosition support to real mode if a feed starts publishing GPS positions (currently GTFS-RT exposes only TripUpdates + ServiceAlerts)
 - Deploy the same pipeline to a real cloud stack (Amazon MSK → EMR/Glue on S3 → Redshift) — the S3A/Delta/JDBC code paths are already cloud-ready
 - Add `dbt` tests as hard gates in the Airflow DAG, or add a lineage UI (e.g. datahub/OpenLineage)

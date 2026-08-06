@@ -1,19 +1,37 @@
 from fastapi import APIRouter
 
+from ..config import settings
 from ..live import live_store
+from ..ml import model as delay_model
 from ..warehouse import provider
 
 router = APIRouter(tags=["meta"])
 
 
+@router.get("/data-source")
+def data_source():
+    """Where the demo data comes from: 'real' (national gtfs.de GTFS + live
+    GTFS-RT delays, positions simulated on the real network) or 'synthetic'."""
+    mode = settings()["data_source"]
+    return {
+        "mode": mode,
+        "label": "REAL GTFS + REALTIME DELAYS" if mode == "real" else "SYNTHETIC DATA",
+        "detail": ("National GTFS (gtfs.de) network + live GTFS-RT delays "
+                   "(realtime.gtfs.de); vehicle positions simulated on the real network."
+                   if mode == "real" else
+                   "Fully simulated network, positions and delays (no real feeds)."),
+    }
+
+
 @router.get("/health")
 def health():
+    delay_model.ensure_loaded()
     return {
         "status": "ok",
         "warehouse_mode": provider.mode,
         "kafka_connected": live_store.counters["transport"] > 0,
         "vehicles_tracked": len(live_store.latest_positions),
-        "ml_loaded": None,
+        "ml_loaded": delay_model.loaded,
     }
 
 

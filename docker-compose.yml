@@ -87,13 +87,13 @@ services:
     command:
       - |
         TOPICS="raw.transport.vehicle.positions raw.transport.trip.updates raw.weather.observations raw.city.events"
-        for t in $TOPICS; do
-          echo "Creating topic $t"
-          kafka-topics.sh --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS --create --if-not-exists \
-            --topic $t --partitions 3 --replication-factor 1 || echo "topic $t exists"
+        for t in $$TOPICS; do
+          echo "Creating topic $$t"
+          kafka-topics.sh --bootstrap-server $$KAFKA_BOOTSTRAP_SERVERS --create --if-not-exists \
+            --topic $$t --partitions 3 --replication-factor 1 || echo "topic $$t exists"
         done
         echo "Topics ready"
-        kafka-topics.sh --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS --list
+        kafka-topics.sh --bootstrap-server $$KAFKA_BOOTSTRAP_SERVERS --list
 
   # ---------------------------------------------------------------------------
   # Object storage (S3 compatible) - Delta Lake warehouse + artifacts
@@ -123,9 +123,9 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        until mc alias set local http://minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD; do sleep 2; done
-        mc mb --ignore-existing local/warehouse || true
-        mc mb --ignore-existing local/artifacts || true
+        until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do sleep 2; done
+        mc mb --ignore-existing local/warehouse
+        mc mb --ignore-existing local/artifacts
         echo "Buckets ready"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-stadtanalyse}
@@ -176,11 +176,23 @@ services:
     depends_on:
       - spark-master
 
+  spark-checkpoints-init:
+    image: busybox:1.36
+    volumes:
+      - spark_checkpoints:/opt/spark/work-dir/checkpoints
+    entrypoint: ["/bin/chown", "-R", "1001:1001", "/opt/spark/work-dir/checkpoints"]
+
   spark-streaming:
     <<: *spark-common
     command:
       - /opt/spark/work-dir/scripts/entrypoint.sh
       - stream_ingest_bronze.py
+    environment:
+      <<: *spark-env
+      SPARK_MASTER_URL: ${SPARK_STREAMING_MASTER:-local[4]}
+    depends_on:
+      spark-checkpoints-init:
+        condition: service_completed_successfully
     volumes:
       - spark_checkpoints:/opt/spark/work-dir/checkpoints
 
@@ -197,11 +209,37 @@ services:
       SIM_VEHICLES: ${SIM_VEHICLES:-40}
       SIM_UPDATE_INTERVAL_SEC: ${SIM_UPDATE_INTERVAL_SEC:-2}
       SIM_FAST_FACTOR: ${SIM_FAST_FACTOR:-1.0}
+      SIM_REAL_NETWORK: ${SIM_REAL_NETWORK:-0}
+      SIM_POSITIONS_ONLY: ${SIM_POSITIONS_ONLY:-0}
     depends_on:
       kafka:
         condition: service_healthy
     restart: unless-stopped
     profiles: ["ingest"]
+    volumes:
+      - ./data:/app/data
+
+  # ---------------------------------------------------------------------------
+  # Real German transit data (national GTFS + GTFS-RT from gtfs.de)
+  # ---------------------------------------------------------------------------
+  realtime:
+    build:
+      context: .
+      dockerfile: ingest/Dockerfile
+    image: stadtanalyse/producer:1.0
+    command: ["python", "-m", "ingest.realtime.run"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      REALTIME_GTFS_URL: ${REALTIME_GTFS_URL:-https://download.gtfs.de/germany/nv_free/latest.zip}
+      REALTIME_RT_URL: ${REALTIME_RT_URL:-https://realtime.gtfs.de/realtime-free.pb}
+      REALTIME_POLL_INTERVAL_SEC: ${REALTIME_POLL_INTERVAL_SEC:-20}
+      REALTIME_MAX_RECORDS: ${REALTIME_MAX_RECORDS:-600}
+      REALTIME_BBOX_RADIUS_KM: ${REALTIME_BBOX_RADIUS_KM:-25}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: ["realtime"]
     volumes:
       - ./data:/app/data
 
@@ -211,6 +249,15 @@ services:
     command:
       - /opt/spark/work-dir/scripts/entrypoint.sh
       - ${SPARK_JOB:-batch_bronze_to_silver.py}
+    environment:
+      <<: *spark-env
+      SPARK_MASTER_URL: ${SPARK_JOBS_MASTER:-local[4]}
+    depends_on:
+      spark-checkpoints-init:
+        condition: service_completed_successfully
+    volumes:
+      - spark_checkpoints:/opt/spark/work-dir/checkpoints
+      - ./data:/app/data:ro
 
   # ---------------------------------------------------------------------------
   # Data quality (Great Expectations)
@@ -257,13 +304,23 @@ services:
   # ---------------------------------------------------------------------------
   # ML model training & serving
   # ---------------------------------------------------------------------------
+  ml-artifacts-init:
+    image: busybox:1.36
+    volumes:
+      - ml_artifacts:/opt/ml/model
+    entrypoint: ["/bin/chown", "-R", "1001:1001", "/opt/ml/model"]
+
   ml-train:
     <<: *spark-common
     command: ["/opt/spark/work-dir/scripts/run_train.sh"]
     volumes:
       - ml_artifacts:/opt/ml/model
+    depends_on:
+      ml-artifacts-init:
+        condition: service_completed_successfully
     environment:
       <<: *spark-env
+      SPARK_MASTER_URL: ${SPARK_JOBS_MASTER:-local[4]}
       ML_MODEL_PATH: /opt/ml/model/model.joblib
       ML_FEATURES_PATH: /opt/ml/model/features.json
       ML_METRICS_PATH: /opt/ml/model/metrics.json
@@ -294,6 +351,7 @@ services:
       ML_FEATURES_PATH: /opt/ml/model/features.json
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-*}
       STADTANALYSE_DATA_DIR: /app/data
+      STADTANALYSE_DATA_SOURCE: ${STADTANALYSE_DATA_SOURCE:-synthetic}
     depends_on:
       - postgres
       - kafka

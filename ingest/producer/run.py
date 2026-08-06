@@ -34,13 +34,22 @@ log = logging.getLogger("stadtanalyse.run")
 
 class CityWatcher:
     """Watches data/city.json for a profile change and hot-swaps the running
-    city: regenerates the GTFS network for the new city, then re-execs this
-    process so all simulators rebuild with the new center. Runs as PID 1 in
-    the container, so execv keeps the container alive."""
+    city, then re-execs this process so all simulators rebuild with the new
+    center. Runs as PID 1 in the container, so execv keeps the container alive.
 
-    def __init__(self, interval: float = 2.0):
+    Two modes:
+      * synthetic (default): regenerates GTFS for the new city with gen_gtfs.py
+      * real network (SIM_REAL_NETWORK=1): the realtime service extracts the
+        national GTFS into data/gtfs; we just wait for the `.city` sentinel to
+        match the requested city and re-exec. Any sentinel change (including
+        the first install) also triggers a restart.
+    """
+
+    def __init__(self, real_network: bool = False, interval: float = 2.0):
+        self.real_network = real_network
         self.interval = interval
         self._seen = self._hash()
+        self._seen_sentinel = self._sentinel()
 
     @staticmethod
     def _hash() -> str | None:
@@ -49,22 +58,61 @@ class CityWatcher:
         except OSError:
             return None
 
+    @staticmethod
+    def _sentinel() -> str | None:
+        try:
+            value = (ROOT / "data" / "gtfs" / ".city").read_text().strip()
+            return value or None
+        except OSError:
+            return None
+
+    @staticmethod
+    def _city_name() -> str | None:
+        try:
+            return json.loads(CITY_FILE.read_text()).get("name")
+        except (OSError, ValueError):
+            return None
+
+    def _execv(self) -> None:
+        os.execv(sys.executable, [sys.executable, "-m", "ingest.producer.run", *sys.argv[1:]])
+
     def run(self, stop: threading.Event) -> None:
         while not stop.wait(self.interval):
-            h = self._hash()
-            if h is None or h == self._seen:
-                continue
-            self._seen = h
-            log.info("City profile changed -> regenerating GTFS and restarting simulators")
-            try:
-                subprocess.run(
-                    [sys.executable, str(GEN_GTFS), "--city", "city.json"],
-                    cwd=ROOT, check=True, capture_output=True, text=True,
-                )
-            except subprocess.CalledProcessError as e:
-                log.error("GTFS regeneration failed (exit %s): %s", e.returncode, e.stderr.strip())
-                continue
-            os.execv(sys.executable, [sys.executable, "-m", "ingest.producer.run", *sys.argv[1:]])
+            if self.real_network:
+                sentinel = self._sentinel()
+                if sentinel and sentinel != self._seen_sentinel:
+                    self._seen_sentinel = sentinel
+                    log.info("Real GTFS network ready for %s -> restarting simulators", sentinel)
+                    self._execv()
+                h = self._hash()
+                if h is not None and h == self._seen:
+                    continue
+                self._seen = h
+                target = self._city_name()
+                log.info("City profile changed to %s -> waiting for real GTFS extraction", target)
+                deadline = time.monotonic() + 900
+                while time.monotonic() < deadline:
+                    if self._sentinel() == target:
+                        self._seen_sentinel = target
+                        log.info("Real GTFS installed for %s -> restarting simulators", target)
+                        self._execv()
+                    time.sleep(2)
+                log.error("Timed out waiting for real GTFS network for %s", target)
+            else:
+                h = self._hash()
+                if h is None or h == self._seen:
+                    continue
+                self._seen = h
+                log.info("City profile changed -> regenerating GTFS and restarting simulators")
+                try:
+                    subprocess.run(
+                        [sys.executable, str(GEN_GTFS), "--city", "city.json"],
+                        cwd=ROOT, check=True, capture_output=True, text=True,
+                    )
+                except subprocess.CalledProcessError as e:
+                    log.error("GTFS regeneration failed (exit %s): %s", e.returncode, e.stderr.strip())
+                    continue
+                self._execv()
 
 
 class DuckDbSink:
@@ -132,13 +180,19 @@ def main() -> int:
     log.info("Starting simulators for %s (%s vehicles) -> %s", cfg.city.name, cfg.vehicles,
              "local DuckDB" if args.local else f"Kafka {cfg.kafka_bootstrap}")
 
+    real_network = os.environ.get("SIM_REAL_NETWORK", "0") == "1"
+    positions_only = os.environ.get("SIM_POSITIONS_ONLY", "0") == "1"
+    if real_network:
+        log.info("Real-network mode: using GTFS installed by the realtime service (%s)", cfg.gtfs_dir)
+
     transport = TransportSimulator(cfg.gtfs_dir, cfg.vehicles, cfg.rush_hour_amplitude, rng=random.Random(11))
+    transport.emit_trip_updates = not positions_only
     weather = WeatherSimulator(cfg.city, rng=random.Random(22))
     events = CityEventsSimulator(cfg.city, rng=random.Random(33))
 
     stop = threading.Event()
     if not args.local:
-        threading.Thread(target=CityWatcher().run, args=(stop,), daemon=True,
+        threading.Thread(target=CityWatcher(real_network=real_network).run, args=(stop,), daemon=True,
                          name="city-watcher").start()
     threads = [
         threading.Thread(target=weather.run, args=(sink, cfg.weather_interval_sec, stop), daemon=True),

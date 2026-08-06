@@ -4,6 +4,12 @@ import { api, type Prediction, type PredictionRequest } from "../api";
 const CONDITIONS = ["clear", "partly_cloudy", "cloudy", "fog", "rain", "storm", "snow"];
 const MODES = ["bus", "tram", "rail"];
 
+const BUCKET_COLOR: Record<string, string> = {
+  on_time: "#34d399",
+  delayed: "#fbbf24",
+  severe: "#f87171",
+};
+
 export function MlPanel() {
   const [req, setReq] = useState<PredictionRequest>({
     route_mode: "bus",
@@ -36,111 +42,89 @@ export function MlPanel() {
     }
   };
 
+  const bucket = res?.predicted_bucket ?? "on_time";
+  const probs = res?.probabilities;
+
   return (
     <div>
-      <div className="form-row">
-        <label>
-          Mode{" "}
+      <div className="ml-form">
+        <div className="field">
+          <label>Mode</label>
           <select value={req.route_mode} onChange={(e) => set("route_mode", e.target.value)}>
             {MODES.map((m) => (
               <option key={m}>{m}</option>
             ))}
           </select>
-        </label>
-        <label>
-          Weather{" "}
+        </div>
+        <div className="field">
+          <label>Weather</label>
           <select value={req.condition} onChange={(e) => set("condition", e.target.value)}>
             {CONDITIONS.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-        </label>
-        <label>
-          Hour{" "}
-          <input
-            type="number"
-            min={0}
-            max={23}
-            value={req.hour_of_day}
-            onChange={(e) => set("hour_of_day", Number(e.target.value))}
-          />
-        </label>
-        <label>
-          Precip (mm){" "}
-          <input
-            type="number"
-            step="0.5"
-            min={0}
-            value={req.precipitation_mm}
-            onChange={(e) => set("precipitation_mm", Number(e.target.value))}
-          />
-        </label>
-        <label>
-          Wind (km/h){" "}
-          <input
-            type="number"
-            step="1"
-            min={0}
-            value={req.wind_speed_kmh}
-            onChange={(e) => set("wind_speed_kmh", Number(e.target.value))}
-          />
-        </label>
-      </div>
-      <div className="form-row">
-        <label>
-          Rush hour{" "}
+        </div>
+        <div className="field">
+          <label>Hour</label>
+          <input type="number" min={0} max={23} value={req.hour_of_day} onChange={(e) => set("hour_of_day", Number(e.target.value))} />
+        </div>
+        <div className="field">
+          <label>Rush hour</label>
           <select value={req.is_rush_hour} onChange={(e) => set("is_rush_hour", Number(e.target.value))}>
             <option value={1}>yes</option>
             <option value={0}>no</option>
           </select>
-        </label>
-        <label>
-          Event nearby{" "}
+        </div>
+        <div className="field">
+          <label>Precip (mm)</label>
+          <input type="number" step="0.5" min={0} value={req.precipitation_mm} onChange={(e) => set("precipitation_mm", Number(e.target.value))} />
+        </div>
+        <div className="field">
+          <label>Wind (km/h)</label>
+          <input type="number" step="1" min={0} value={req.wind_speed_kmh} onChange={(e) => set("wind_speed_kmh", Number(e.target.value))} />
+        </div>
+        <div className="field">
+          <label>Event nearby</label>
           <select value={req.event_nearby} onChange={(e) => set("event_nearby", Number(e.target.value))}>
             <option value={1}>yes</option>
             <option value={0}>no</option>
           </select>
-        </label>
-        <label>
-          Segment (km){" "}
-          <input
-            type="number"
-            step="0.1"
-            min={0}
-            value={req.segment_km}
-            onChange={(e) => set("segment_km", Number(e.target.value))}
-          />
-        </label>
-        <label>
-          Hist avg delay (s){" "}
-          <input
-            type="number"
-            step="5"
-            min={0}
-            value={req.historical_avg_delay}
-            onChange={(e) => set("historical_avg_delay", Number(e.target.value))}
-          />
-        </label>
-        <button className="btn" onClick={run} disabled={busy}>
-          {busy ? "…" : "Predict"}
-        </button>
+        </div>
+        <div className="field">
+          <label>Segment (km)</label>
+          <input type="number" step="0.1" min={0} value={req.segment_km} onChange={(e) => set("segment_km", Number(e.target.value))} />
+        </div>
+        <div className="field">
+          <label>Hist avg delay (s)</label>
+          <input type="number" step="5" min={0} value={req.historical_avg_delay} onChange={(e) => set("historical_avg_delay", Number(e.target.value))} />
+        </div>
+        <div className="field toggle">
+          <button className="btn" onClick={run} disabled={busy}>
+            {busy ? "Predicting…" : "Predict delay"}
+          </button>
+        </div>
       </div>
 
       {res && (
-        <div className="result-card">
+        <div className="result">
           {res.loaded ? (
             <>
-              <div>
-                Predicted delay <span className="big">{Math.round(res.predicted_delay_seconds ?? 0)}s</span>
-                <span className="muted small"> · bucket: {res.predicted_bucket}</span>
-              </div>
-              {res.probabilities && (
-                <div className="legend" style={{ marginTop: 8 }}>
-                  {Object.entries(res.probabilities).map(([k, v]) => (
-                    <span key={k}>
-                      <span className="dot" style={{ background: v > 0.5 ? "#38bdf8" : "#1e2a44" }} />
-                      {k} {(v * 100).toFixed(1)}%
-                    </span>
+              <div className="faint small" style={{ marginBottom: 6 }}>PREDICTED DELAY · XGBoost v1</div>
+              <span className="big">{Math.round(res.predicted_delay_seconds ?? 0)}</span>
+              <span className="muted" style={{ fontSize: 18 }}>s</span>
+              <span className={`bucket ${bucket}`}>{bucket}</span>
+              {probs && (
+                <div style={{ marginTop: 14 }}>
+                  {Object.entries(probs).map(([k, v]) => (
+                    <div key={k} className="prob-row" style={{ marginBottom: 8 }}>
+                      <div className="row" style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                        <span className="muted">{k}</span>
+                        <b className="mono">{(v * 100).toFixed(1)}%</b>
+                      </div>
+                      <div className="prob-bar">
+                        <div style={{ width: `${(v * 100).toFixed(1)}%`, background: BUCKET_COLOR[k] ?? "#22d3ee" }} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

@@ -12,14 +12,44 @@ import {
   type WeatherImpact,
   type WeatherObservation,
 } from "./api";
-import { EventImpactPanel, RouteTable, WeatherPanel } from "./components/Panels";
-import { HotspotChart, ImpactChart, TrendsChart } from "./components/Charts";
+import { Sidebar, type ViewId } from "./components/Sidebar";
+import { KpiCard } from "./components/Kpi";
 import { LiveMap } from "./components/LiveMap";
+import { ImpactChart, HotspotChart, TrendsChart } from "./components/Charts";
+import { EventImpactPanel, RouteTable, WeatherImpactTable, WeatherPanel } from "./components/Panels";
 import { MlPanel } from "./components/MlPanel";
 import { PipelinePanel } from "./components/PipelinePanel";
-import { KpiCard } from "./components/Kpi";
+import { Gauge } from "./components/Gauge";
+
+const TITLES: Record<ViewId, string> = {
+  overview: "Command Overview",
+  map: "Live Fleet Map",
+  analytics: "Network Analytics",
+  ml: "ML Delay Lab",
+  pipeline: "Data Pipeline",
+};
+
+function Clock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="clock">{now.toLocaleTimeString()}</span>;
+}
+
+function PanelHead({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="panel-head">
+      <h3>{title}</h3>
+      <div className="spacer" />
+      {hint && <span className="hint">{hint}</span>}
+    </div>
+  );
+}
 
 export default function App() {
+  const [view, setView] = useState<ViewId>("overview");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [positions, setPositions] = useState<VehiclePosition[]>([]);
   const [routes, setRoutes] = useState<RouteReliability[]>([]);
@@ -85,72 +115,172 @@ export default function App() {
 
   const source = kpis?.data_source ?? (liveRef.current ? "live-stream" : "warehouse");
   const live = connected && liveRef.current;
+  const vehicles = positions.length || kpis?.vehicles_tracked || 0;
 
   return (
     <div className="app">
-      <header>
-        <div className="logo">
-          City<span>Pulse</span>
+      <Sidebar view={view} onView={setView} live={live} source={source} vehicles={vehicles} city="Berlin" />
+
+      <div className="main">
+        <div className="topbar">
+          <div>
+            <div className="crumb">Stadtanalyse / {TITLES[view].toLowerCase()}</div>
+            <h1>{TITLES[view]}</h1>
+          </div>
+          <div className="spacer" />
+          {live ? <span className="pill-live">LIVE STREAM</span> : <span className="pill-snap">warehouse snapshot</span>}
+          <span className="clock">{lastSync}</span>
+          <Clock />
         </div>
-        <div className="sub">Smart Urban Mobility Data Lake &amp; Analytics</div>
-        <div className="spacer" />
-        {live ? (
-          <span className="pill live">● LIVE STREAM</span>
-        ) : (
-          <span className="pill warn">▲ warehouse snapshot</span>
-        )}
-        <span className="pill">source: {source}</span>
-        <span className="pill">{lastSync}</span>
-      </header>
 
-      <main>
-        <KpiCard kpis={kpis} />
+        <div className="content">
+          {view === "overview" && (
+            <>
+              <KpiCard kpis={kpis} live={live} />
+              <div className="grid-3">
+                <div className="panel">
+                  <PanelHead title="Punctuality" hint="last 24h" />
+                  <div className="gauge-wrap">
+                    <Gauge value={kpis?.on_time_pct ?? 0} label="on-time" />
+                    <div className="gauge-side">
+                      <div className="row"><span>Avg delay</span><b>{(kpis?.avg_delay_seconds ?? 0).toFixed(0)}s</b></div>
+                      <div className="row"><span>Severe</span><b>{kpis?.severe_delays ?? 0}</b></div>
+                      <div className="row"><span>Speed</span><b>{(kpis?.avg_speed_kmh ?? 0).toFixed(1)} km/h</b></div>
+                      <div className="row"><span>Events</span><b>{kpis?.active_events ?? 0}</b></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel">
+                  <PanelHead title="Delay Trend" hint="24h" />
+                  <TrendsChart trends={trends} />
+                </div>
+                <div className="panel">
+                  <PanelHead title="Top Hotspots" hint="by avg delay" />
+                  <HotspotChart hotspots={hotspots} />
+                </div>
+              </div>
+              <div className="grid">
+                <div className="panel">
+                  <PanelHead title="Live Fleet Map · Berlin" hint="weather zones + events" />
+                  <LiveMap positions={positions} events={events} weather={weather} height={400} />
+                </div>
+                <div className="panel">
+                  <PanelHead title="Route Reliability" />
+                  <RouteTable routes={routes} />
+                  <PanelHead title="Weather Impact" />
+                  <WeatherImpactTable data={weatherImpact} />
+                </div>
+              </div>
+            </>
+          )}
 
-        <div className="grid">
-          <div className="panel">
-            <h3>Live Fleet Map · Berlin</h3>
-            <div className="map-wrap">
-              <LiveMap positions={positions} events={events} weather={weather} />
+          {view === "map" && (
+            <div className="panel" style={{ padding: 0 }}>
+              <div className="panel-head" style={{ padding: "18px 18px 6px" }}>
+                <h3>Live Fleet Map · Berlin</h3>
+                <div className="spacer" />
+                <span className="hint">{positions.length} vehicles · {events.length} events · {weather.length} weather zones</span>
+              </div>
+              <LiveMap positions={positions} events={events} weather={weather} height={760} />
             </div>
-          </div>
-          <div className="panel">
-            <h3>Route Reliability</h3>
-            <RouteTable routes={routes} />
-            <h3 style={{ marginTop: 16 }}>City Events</h3>
-            <EventImpactPanel events={events} />
-          </div>
-        </div>
+          )}
 
-        <div className="charts">
-          <div className="panel">
-            <h3>Network Delay Trend (24h)</h3>
-            <TrendsChart trends={trends} />
-          </div>
-          <div className="panel">
-            <h3>Congestion Hotspots</h3>
-            <HotspotChart hotspots={hotspots} />
-          </div>
-          <div className="panel">
-            <h3>Weather Impact on Delays</h3>
-            <ImpactChart data={weatherImpact} />
-          </div>
-          <div className="panel">
-            <h3>Weather per Zone</h3>
-            <WeatherPanel zones={weather} />
-          </div>
-        </div>
+          {view === "analytics" && (
+            <>
+              <div className="grid">
+                <div className="panel">
+                  <PanelHead title="Network Delay Trend" hint="24h" />
+                  <TrendsChart trends={trends} />
+                </div>
+                <div className="panel">
+                  <PanelHead title="Weather Impact on Delays" />
+                  <ImpactChart data={weatherImpact} />
+                </div>
+              </div>
+              <div className="grid">
+                <div className="panel">
+                  <PanelHead title="Congestion Hotspots" hint="top 10 grid cells" />
+                  <HotspotChart hotspots={hotspots} />
+                </div>
+                <div className="panel">
+                  <PanelHead title="Route Reliability" />
+                  <RouteTable routes={routes} />
+                </div>
+              </div>
+              <div className="grid">
+                <div className="panel">
+                  <PanelHead title="Weather per Zone" />
+                  <WeatherPanel zones={weather} />
+                </div>
+                <div className="panel">
+                  <PanelHead title="Active City Events" />
+                  <EventImpactPanel events={events} />
+                </div>
+              </div>
+            </>
+          )}
 
-        <div className="grid">
-          <div className="panel">
-            <h3>Delay Prediction (XGBoost)</h3>
-            <MlPanel />
-          </div>
-          <div className="panel">
-            <h3>Pipeline Health</h3>
-            <PipelinePanel pipeline={pipeline} />
-          </div>
+          {view === "ml" && (
+            <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
+              <div className="panel">
+                <PanelHead title="Delay Prediction Lab" hint="XGBoost · trained on silver warehouse" />
+                <MlPanel />
+              </div>
+              <div className="panel">
+                <PanelHead title="Model Card" />
+                <div className="status-card" style={{ marginBottom: 10 }}>
+                  <div className="lbl">Approach</div>
+                  <div className="val">Gradient-boosted trees (XGBoost) classifying delay buckets and regressing delay seconds</div>
+                </div>
+                <div className="status-card" style={{ marginBottom: 10 }}>
+                  <div className="lbl">Features</div>
+                  <div className="val">mode · weather condition · hour · rush hour · precip · wind · segment km · event proximity · historical delay · zone</div>
+                </div>
+                <div className="status-card">
+                  <div className="lbl">Pipeline</div>
+                  <div className="val">silver Δ → feature matrix → train/validate split → metrics → artifacts (joblib + features.json)</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {view === "pipeline" && (
+            <>
+              <div className="grid">
+                <div className="panel">
+                  <PanelHead title="Ingestion &amp; Warehouse Health" />
+                  <PipelinePanel pipeline={pipeline} />
+                </div>
+                <div className="panel">
+                  <PanelHead title="Batch Flow" hint="Airflow · 15 min" />
+                  <div className="status-grid" style={{ gridTemplateColumns: "1fr" }}>
+                    {[
+                      ["Stream", "Kafka → bronze lakehouse (MinIO)"],
+                      ["Gold", "dbt transforms bronze → silver → gold"],
+                      ["Quality", "Great Expectations suites on gold"],
+                      ["Retrain", "XGBoost delay model on silver Δ"],
+                    ].map(([k, v]) => (
+                      <div className="status-card" key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span className="lbl">{k}</span>
+                        <span className="faint small" style={{ textAlign: "right" }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="muted small" style={{ marginTop: 12 }}>
+                    Data source: <b>{source}</b> · last sync <b>{lastSync}</b>
+                  </div>
+                </div>
+              </div>
+              <div className="panel">
+                <PanelHead title="Live Stream Frames" hint="SSE · 1s" />
+                <div className="muted small">
+                  Positions stream is connected {live ? "live via Kafka topic `citypulse.positions`" : "in snapshot mode (DuckDB demo seed)"}. {positions.length} vehicles rendered.
+                </div>
+              </div>
+            </>
+          )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// API client + shared types for the CityPulse dashboard.
+// API client + shared types for the Stadtanalyse dashboard.
 export interface VehiclePosition {
   vehicle_id: string;
   route_id: string;

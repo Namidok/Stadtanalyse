@@ -15,10 +15,12 @@ import type { Hotspot, TrendPoint, WeatherImpact } from "../api";
 import { CONDITION_COLORS } from "../api";
 
 const TOOLTIP_STYLE = {
-  background: "#111a2e",
-  border: "1px solid #1e2a44",
-  borderRadius: 8,
+  background: "rgba(10, 17, 32, 0.95)",
+  border: "1px solid rgba(148, 163, 184, 0.28)",
+  borderRadius: 10,
   fontSize: 12,
+  boxShadow: "0 8px 32px rgba(2, 6, 16, 0.45)",
+  color: "#e6edf7",
 };
 
 export function TrendsChart({ trends }: { trends: TrendPoint[] }) {

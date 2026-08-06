@@ -20,7 +20,7 @@ from pyspark.sql.types import DoubleType
 from common import build_session, s3_path, write_jdbc
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("citypulse.silver")
+log = logging.getLogger("stadtanalyse.silver")
 
 CITY = {"lat": 52.52, "lon": 13.405}
 BOUNDS = {"lat_min": 52.35, "lat_max": 52.68, "lon_min": 13.08, "lon_max": 13.75}
@@ -111,7 +111,7 @@ def clean_events(spark: SparkSession):
 
 
 def main():
-    spark = build_session("citypulse-bronze-to-silver")
+    spark = build_session("stadtanalyse-bronze-to-silver")
     summary = {
         "transport_positions": clean_transport(spark),
         "trip_updates": clean_trip_updates(spark),

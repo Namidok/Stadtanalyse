@@ -1,4 +1,8 @@
-# CityPulse — Smart Urban Mobility Data Lake & Analytics Platform
+<p align="center">
+  <img src="web/public/logo-wide.svg" alt="Stadtanalyse" width="620">
+</p>
+
+# Stadtanalyse — Smart Urban Mobility Data Lake & Analytics Platform
 
 A production-style, end-to-end data engineering platform that ingests **real-time transit, weather, and city-event** data, cleanses and organizes it into a **Delta Lake medallion architecture**, runs **data-quality checks**, builds **analytical marts** with **dbt**, retrains an **XGBoost delay-prediction model**, and serves everything through a **FastAPI + React** dashboard — all orchestrated by **Airflow** and monitored with **Prometheus + Grafana**.
 
@@ -93,7 +97,7 @@ make up                     # builds & starts the whole stack
 | Airflow | http://localhost:8080 | admin / admin |
 | Grafana | http://localhost:3001 | admin / admin |
 | Kafka UI | http://localhost:8081 | — |
-| MinIO console | http://localhost:9001 | citypulse / citypulse-secret |
+| MinIO console | http://localhost:9001 | stadtanalyse / stadtanalyse-secret |
 
 ### 2. Generate & inject demo data
 
@@ -108,7 +112,7 @@ make ingest   # start the simulators producing to Kafka (streaming)
 make jobs     # spark-run (silver) → quality (GE) → dbt (gold) → ml-train
 ```
 
-Or trigger the equivalent DAG from Airflow (`citypulse_batch_pipeline`, every 15 min).
+Or trigger the equivalent DAG from Airflow (`stadtanalyse_batch_pipeline`, every 15 min).
 The `spark-streaming` service continuously consumes Kafka into Bronze; the API streams live positions to the dashboard over Server-Sent Events.
 
 ### 4. Local-only development (no Docker)
@@ -126,7 +130,7 @@ Without Kafka/Postgres the API automatically seeds from the local DuckDB snapsho
 
 ## Batch pipeline detail
 
-`silver → quality → gold → retrain` is expressed both as a Makefile target (`make jobs`) and as an Airflow DAG (`airflow/dags/citypulse_batch_pipeline.py`). Airflow runs each step in its own container (the same compose-built images) attached to the `citypulse_default` network via the Docker daemon socket.
+`silver → quality → gold → retrain` is expressed both as a Makefile target (`make jobs`) and as an Airflow DAG (`airflow/dags/stadtanalyse_batch_pipeline.py`). Airflow runs each step in its own container (the same compose-built images) attached to the `stadtanalyse_default` network via the Docker daemon socket.
 
 ## ML: delay prediction
 
@@ -140,7 +144,7 @@ Features include route mode, weather condition, rush-hour flag, segment length, 
 ## Observability
 
 - **Prometheus** scrapes the API (`/metrics`: request rate, latency histograms, ingest counters), Kafka, Postgres, and node exporters.
-- **Grafana** auto-provisions the **CityPulse Platform** dashboard on first start.
+- **Grafana** auto-provisions the **Stadtanalyse Platform** dashboard on first start.
 - **Monitoring API**: `GET /api/v1/monitoring/pipeline` and `GET /api/v1/monitoring/quality` give a runtime view of ingestion, warehouse mode, and the last quality run.
 
 ## API surface (abridged)

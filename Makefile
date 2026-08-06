@@ -8,13 +8,13 @@ help: ## Show this help
 # ---------------------------------------------------------------------------
 up: ## Start the full platform (Kafka, MinIO, Postgres, Spark, API, Web, Airflow, Grafana)
 	docker compose up -d --build
-	@echo "\nCityPulse is starting..."
+	@echo "\nStadtanalyse is starting..."
 	@echo "  Web UI:        http://localhost:3000"
 	@echo "  API docs:      http://localhost:8000/docs"
 	@echo "  Grafana:       http://localhost:3001 (admin/admin)"
 	@echo "  Airflow:       http://localhost:8080 (admin/admin)"
 	@echo "  Kafka UI:      http://localhost:8081"
-	@echo "  MinIO console: http://localhost:9001 (citypulse/citypulse-secret)"
+	@echo "  MinIO console: http://localhost:9001 (stadtanalyse/stadtanalyse-secret)"
 
 up-lite: ## Start only the demo-facing services (Kafka, MinIO, Postgres, producer, API, Web)
 	docker compose --profile ingest up -d --build kafka kafka-init minio minio-init postgres producer api web spark-streaming

@@ -28,8 +28,8 @@ HERE = Path(__file__).resolve().parent
 SUITE_DIR = HERE / "great_expectations/suites"
 
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://minio:9000").replace("http://", "").replace("https://", "")
-S3_ACCESS = os.environ.get("S3_ACCESS_KEY", "citypulse")
-S3_SECRET = os.environ.get("S3_SECRET_KEY", "citypulse-secret")
+S3_ACCESS = os.environ.get("S3_ACCESS_KEY", "stadtanalyse")
+S3_SECRET = os.environ.get("S3_SECRET_KEY", "stadtanalyse-secret")
 BUCKET = os.environ.get("S3_BUCKET_RAW", "warehouse")
 PREFIX = "silver_export/"
 
@@ -82,9 +82,9 @@ def publish_results(summaries: list[dict]) -> None:
     API / pipeline monitoring endpoints can report on data quality."""
     host = os.environ.get("POSTGRES_HOST", "postgres")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    user = os.environ.get("POSTGRES_USER", "citypulse")
-    password = os.environ.get("POSTGRES_PASSWORD", "citypulse-secret")
-    db = os.environ.get("POSTGRES_DB", "citypulse")
+    user = os.environ.get("POSTGRES_USER", "stadtanalyse")
+    password = os.environ.get("POSTGRES_PASSWORD", "stadtanalyse-secret")
+    db = os.environ.get("POSTGRES_DB", "stadtanalyse")
     try:
         with psycopg2.connect(host=host, port=port, user=user, password=password, dbname=db, connect_timeout=3) as conn:
             with conn.cursor() as cur:

@@ -1,0 +1,20 @@
+[
+  { "name": "Berlin", "lat": 52.52, "lon": 13.405 },
+  { "name": "Hamburg", "lat": 53.5511, "lon": 9.9937 },
+  { "name": "München", "lat": 48.1351, "lon": 11.582 },
+  { "name": "Köln", "lat": 50.9375, "lon": 6.9603 },
+  { "name": "Frankfurt am Main", "lat": 50.1109, "lon": 8.6821 },
+  { "name": "Stuttgart", "lat": 48.7758, "lon": 9.1829 },
+  { "name": "Düsseldorf", "lat": 51.2277, "lon": 6.7735 },
+  { "name": "Leipzig", "lat": 51.3397, "lon": 12.3731 },
+  { "name": "Dortmund", "lat": 51.5136, "lon": 7.4653 },
+  { "name": "Essen", "lat": 51.4556, "lon": 7.0116 },
+  { "name": "Dresden", "lat": 51.0504, "lon": 13.7373 },
+  { "name": "Nürnberg", "lat": 49.4521, "lon": 11.0767 },
+  { "name": "Hannover", "lat": 52.3759, "lon": 9.732 },
+  { "name": "Bremen", "lat": 53.0793, "lon": 8.8017 },
+  { "name": "Bielefeld", "lat": 52.0302, "lon": 8.5325 },
+  { "name": "Bonn", "lat": 50.7374, "lon": 7.0982 },
+  { "name": "Karlsruhe", "lat": 49.0069, "lon": 8.4037 },
+  { "name": "Münster", "lat": 51.9607, "lon": 7.6261 }
+]

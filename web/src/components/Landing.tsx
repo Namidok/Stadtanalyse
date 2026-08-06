@@ -5,7 +5,7 @@ const FEATURES: Array<{ icon: string; title: string; desc: string; accent: strin
   {
     icon: "M3 13l3-8 3 8M7 13v6M17 8a3 3 0 1 0 3 3M17 11v8M9 19h8",
     title: "Live Fleet Tracking",
-    desc: "Vehicle positions stream in over Kafka and render in real time on an interactive city map — every bus, tram and rail unit across Berlin.",
+    desc: "Vehicle positions stream in over Kafka and render in real time on an interactive city map — every bus, tram and rail unit across the city.",
     accent: "#22d3ee",
   },
   {
@@ -60,14 +60,23 @@ function Stat({ value, suffix, label, decimals }: { value: number; suffix: strin
   );
 }
 
-export function Landing({ kpis, live, vehicles, onEnter }: { kpis: Kpis | null; live: boolean; vehicles: number; onEnter: () => void }) {
+export function Landing({ kpis, live, vehicles, city, onEnter }: { kpis: Kpis | null; live: boolean; vehicles: number; city?: string; onEnter: () => void }) {
   return (
     <div className="landing">
       <div className="land-hero">
-        <div className="land-badge">{live ? <span className="pill-live">LIVE · KAFKA STREAM</span> : <span className="pill-snap">DEMO SNAPSHOT</span>}</div>
+        <div className="land-badge">{live ? <span className="pill-live">LIVE · KAFKA STREAM{city ? ` · ${city.toUpperCase()}` : ""}</span> : <span className="pill-snap">DEMO SNAPSHOT</span>}</div>
         <div className="land-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" width="34" height="34">
-            <path d="M3 13l3-8 3 8M7 13v6M17 8a3 3 0 1 0 3 3M17 11v8M9 19h8" />
+          <svg viewBox="0 0 24 24" width="34" height="34">
+            <g fill="currentColor">
+              <rect x="5" y="13" width="3" height="6" rx="0.6" />
+              <rect x="9" y="10" width="3.4" height="9" rx="0.6" />
+              <rect x="13.2" y="14" width="2.6" height="5" rx="0.5" />
+              <rect x="16.6" y="11.5" width="2.4" height="7.5" rx="0.5" />
+            </g>
+            <polyline points="5.5,19 10,16 14,12 18.5,6.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="10" cy="16" r="0.9" fill="currentColor" />
+            <circle cx="14" cy="12" r="0.9" fill="currentColor" />
+            <circle cx="18.5" cy="6.5" r="1.2" fill="currentColor" />
           </svg>
         </div>
         <h1 className="land-title">

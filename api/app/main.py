@@ -1,4 +1,4 @@
-"""CityPulse API - serving layer for the analytics dashboard and ML model."""
+"""Stadtanalyse API - serving layer for the analytics dashboard and ML model."""
 from __future__ import annotations
 
 import logging
@@ -13,11 +13,11 @@ from starlette.responses import Response
 from .config import settings
 from .live import live_store
 from .warehouse import provider
-from .routers import analytics, delays, events, health, live, ml, monitoring, weather
+from .routers import analytics, cities, delays, events, health, live, ml, monitoring, weather
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-app = FastAPI(title="CityPulse API", version="1.0.0", description="Smart Urban Mobility Data Lake & Analytics Platform")
+app = FastAPI(title="Stadtanalyse API", version="1.0.0", description="Smart Urban Mobility Data Lake & Analytics Platform")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,11 +27,11 @@ app.add_middleware(
 )
 
 # Prometheus metrics
-HTTP_REQUESTS = Counter("citypulse_http_requests_total", "HTTP requests", ["method", "path"])
-HTTP_LATENCY = Histogram("citypulse_http_latency_seconds", "HTTP latency", ["path"])
-INGEST_RATE = Counter("citypulse_ingest_records_total", "Ingested records", ["stream"])
+HTTP_REQUESTS = Counter("stadtanalyse_http_requests_total", "HTTP requests", ["method", "path"])
+HTTP_LATENCY = Histogram("stadtanalyse_http_latency_seconds", "HTTP latency", ["path"])
+INGEST_RATE = Counter("stadtanalyse_ingest_records_total", "Ingested records", ["stream"])
 
-for router in (health.router, live.router, delays.router, analytics.router, weather.router, events.router, monitoring.router, ml.router):
+for router in (health.router, live.router, delays.router, analytics.router, weather.router, events.router, monitoring.router, ml.router, cities.router):
     app.include_router(router, prefix="/api/v1")
 
 
@@ -63,7 +63,7 @@ def startup():
     live_store.on_ingest = lambda stream: INGEST_RATE.labels(stream).inc()
     live_store.start()
     provider.set_live(live_store)
-    logging.getLogger("citypulse.api").info("CityPulse API started")
+    logging.getLogger("stadtanalyse.api").info("Stadtanalyse API started")
 
 
 @app.on_event("shutdown")

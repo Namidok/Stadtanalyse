@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a synthetic GTFS static feed for the CityPulse demo city.
+"""Generate a synthetic GTFS static feed for the Stadtanalyse demo city.
 
 Creates routes.txt, stops.txt, trips.txt and stop_times.txt in data/gtfs.
 The network is a realistic grid of radial + ring lines (bus/tram/rail mix).
@@ -76,7 +76,7 @@ def main():
     if city_path.exists():
         profile = json.loads(city_path.read_text())
     else:
-        profile = {"name": "Berlin", "lat": 52.52, "lon": 13.405, "agency": "CityPulse Transit"}
+        profile = {"name": "Berlin", "lat": 52.52, "lon": 13.405, "agency": "Stadtanalyse Transit"}
 
     GTFS_DIR.mkdir(parents=True, exist_ok=True)
     rng = random.Random(7)

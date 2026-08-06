@@ -1,14 +1,14 @@
 version: 2
 
 exposures:
-  - name: citypulse_dashboard
-    label: "CityPulse Operations Dashboard"
+  - name: stadtanalyse_dashboard
+    label: "Stadtanalyse Operations Dashboard"
     type: dashboard
     url: http://localhost:3000
     description: "Live transport operations dashboard backed by the Gold-layer marts."
     owner:
-      name: CityPulse Data Team
-      email: data@citypulse.local
+      name: Stadtanalyse Data Team
+      email: data@stadtanalyse.local
     depends_on:
       - ref("mart_route_reliability")
       - ref("mart_delay_trends")

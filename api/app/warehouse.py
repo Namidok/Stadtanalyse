@@ -8,7 +8,7 @@ import time
 from .config import settings
 from .db import DBUnavailable, MemoryWarehouse, PostgresWarehouse
 
-log = logging.getLogger("citypulse.warehouse")
+log = logging.getLogger("stadtanalyse.warehouse")
 
 _TTL = 30  # seconds between Postgres availability checks
 

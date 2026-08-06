@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   positionsStream,
+  type City,
   type CityEvent,
   type Hotspot,
   type Kpis,
@@ -20,12 +21,13 @@ import { EventImpactPanel, RouteTable, WeatherImpactTable, WeatherPanel } from "
 import { MlPanel } from "./components/MlPanel";
 import { PipelinePanel } from "./components/PipelinePanel";
 import { Gauge } from "./components/Gauge";
+import { Landing } from "./components/Landing";
 
-const TITLES: Record<ViewId, string> = {
+const TITLES: Record<Exclude<ViewId, "landing">, string> = {
   overview: "Command Overview",
   map: "Live Fleet Map",
   analytics: "Network Analytics",
-  ml: "ML Delay Lab",
+  ml: "Delay Predictor",
   pipeline: "Data Pipeline",
 };
 
@@ -48,8 +50,26 @@ function PanelHead({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
+function CityPicker({ cities, city, disabled, onSelect }: { cities: City[]; city: City | null; disabled: boolean; onSelect: (name: string) => void }) {
+  return (
+    <label className="city-picker" title="Switch simulated city">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+      </svg>
+      <select value={city?.name ?? ""} onChange={(e) => onSelect(e.target.value)} disabled={disabled || cities.length === 0}>
+        {cities.map((c) => (
+          <option key={c.name} value={c.name}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export default function App() {
-  const [view, setView] = useState<ViewId>("overview");
+  const [view, setView] = useState<ViewId>("landing");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [positions, setPositions] = useState<VehiclePosition[]>([]);
   const [routes, setRoutes] = useState<RouteReliability[]>([]);
@@ -61,9 +81,14 @@ export default function App() {
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastSync, setLastSync] = useState<string>("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [cities, setCities] = useState<City[]>([]);
+  const [city, setCity] = useState<City | null>(null);
+  const [switching, setSwitching] = useState(false);
   const liveRef = useRef(false);
 
   const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
       const [k, r, t, h, w, wi, e, p] = await Promise.all([
         api.kpis(),
@@ -86,6 +111,8 @@ export default function App() {
       setLastSync(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("refresh failed", err);
+    } finally {
+      setRefreshing(false);
     }
   }, []);
 
@@ -94,6 +121,27 @@ export default function App() {
     const id = setInterval(refresh, 10_000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  useEffect(() => {
+    api.cities().then((c) => setCities(c.cities)).catch(() => {});
+    api.cityCurrent().then((c) => setCity(c)).catch(() => {});
+  }, []);
+
+  const switchCity = useCallback(async (name: string) => {
+    if (!name || name === city?.name) return;
+    setSwitching(true);
+    try {
+      await api.switchCity(name);
+      const cur = await api.cityCurrent();
+      setCity(cur);
+      setLastSync(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error("switch city failed", err);
+    } finally {
+      setSwitching(false);
+      refresh();
+    }
+  }, [city, refresh]);
 
   useEffect(() => {
     const close = positionsStream(
@@ -117,20 +165,34 @@ export default function App() {
   const live = connected && liveRef.current;
   const vehicles = positions.length || kpis?.vehicles_tracked || 0;
 
+  if (view === "landing") {
+    return <Landing kpis={kpis} live={live} vehicles={vehicles} city={city?.name} onEnter={() => setView("overview")} />;
+  }
+
+  const title = TITLES[view];
+  const mapCenter: [number, number] = [city?.lat ?? 52.52, city?.lon ?? 13.405];
+
   return (
     <div className="app">
-      <Sidebar view={view} onView={setView} live={live} source={source} vehicles={vehicles} city="Berlin" />
+      <Sidebar view={view} onView={setView} live={live} source={source} vehicles={vehicles} city={city?.name ?? "Berlin"} />
 
       <div className="main">
         <div className="topbar">
           <div>
-            <div className="crumb">Stadtanalyse / {TITLES[view].toLowerCase()}</div>
-            <h1>{TITLES[view]}</h1>
+            <div className="crumb">Stadtanalyse / {title.toLowerCase()}</div>
+            <h1>{title}</h1>
           </div>
           <div className="spacer" />
+          <CityPicker cities={cities} city={city} disabled={switching} onSelect={switchCity} />
           {live ? <span className="pill-live">LIVE STREAM</span> : <span className="pill-snap">warehouse snapshot</span>}
           <span className="clock">{lastSync}</span>
           <Clock />
+          <button className="btn btn-ghost btn-sm" onClick={refresh} disabled={refreshing}>
+            {refreshing ? "…" : "Refresh"}
+          </button>
+          <a className="btn btn-ghost btn-sm" href="/docs" target="_blank" rel="noreferrer">
+            API docs ↗
+          </a>
         </div>
 
         <div className="content">
@@ -161,8 +223,8 @@ export default function App() {
               </div>
               <div className="grid">
                 <div className="panel">
-                  <PanelHead title="Live Fleet Map · Berlin" hint="weather zones + events" />
-                  <LiveMap positions={positions} events={events} weather={weather} height={400} />
+                  <PanelHead title={`Live Fleet Map · ${city?.name ?? ""}`} hint="weather zones + events" />
+                  <LiveMap key={city?.name ?? "default"} positions={positions} events={events} weather={weather} height={400} center={mapCenter} />
                 </div>
                 <div className="panel">
                   <PanelHead title="Route Reliability" />
@@ -177,11 +239,11 @@ export default function App() {
           {view === "map" && (
             <div className="panel" style={{ padding: 0 }}>
               <div className="panel-head" style={{ padding: "18px 18px 6px" }}>
-                <h3>Live Fleet Map · Berlin</h3>
+                <h3>Live Fleet Map · {city?.name ?? ""}</h3>
                 <div className="spacer" />
                 <span className="hint">{positions.length} vehicles · {events.length} events · {weather.length} weather zones</span>
               </div>
-              <LiveMap positions={positions} events={events} weather={weather} height={760} />
+              <LiveMap key={city?.name ?? "default"} positions={positions} events={events} weather={weather} height={760} center={mapCenter} />
             </div>
           )}
 
@@ -221,26 +283,9 @@ export default function App() {
           )}
 
           {view === "ml" && (
-            <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
-              <div className="panel">
-                <PanelHead title="Delay Prediction Lab" hint="XGBoost · trained on silver warehouse" />
-                <MlPanel />
-              </div>
-              <div className="panel">
-                <PanelHead title="Model Card" />
-                <div className="status-card" style={{ marginBottom: 10 }}>
-                  <div className="lbl">Approach</div>
-                  <div className="val">Gradient-boosted trees (XGBoost) classifying delay buckets and regressing delay seconds</div>
-                </div>
-                <div className="status-card" style={{ marginBottom: 10 }}>
-                  <div className="lbl">Features</div>
-                  <div className="val">mode · weather condition · hour · rush hour · precip · wind · segment km · event proximity · historical delay · zone</div>
-                </div>
-                <div className="status-card">
-                  <div className="lbl">Pipeline</div>
-                  <div className="val">silver Δ → feature matrix → train/validate split → metrics → artifacts (joblib + features.json)</div>
-                </div>
-              </div>
+            <div className="panel">
+              <PanelHead title="Trip Delay Predictor" hint="XGBoost · trained on the silver warehouse" />
+              <MlPanel />
             </div>
           )}
 
@@ -274,7 +319,7 @@ export default function App() {
               <div className="panel">
                 <PanelHead title="Live Stream Frames" hint="SSE · 1s" />
                 <div className="muted small">
-                  Positions stream is connected {live ? "live via Kafka topic `citypulse.positions`" : "in snapshot mode (DuckDB demo seed)"}. {positions.length} vehicles rendered.
+                  Positions stream is connected {live ? "live via Kafka topic `raw.transport.vehicle.positions`" : "in snapshot mode (DuckDB demo seed)"}. {positions.length} vehicles rendered.
                 </div>
               </div>
             </>

@@ -8,20 +8,63 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
+import os
 import random
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
 
 from ..simulator import load_config
+from ..simulator.config import ROOT
 from ..simulator.events import CityEventsSimulator
 from ..simulator.transport import TransportSimulator
 from ..simulator.weather import WeatherSimulator
 
+CITY_FILE = ROOT / "data" / "city.json"
+GEN_GTFS = ROOT / "scripts" / "gen_gtfs.py"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-log = logging.getLogger("citypulse.run")
+log = logging.getLogger("stadtanalyse.run")
+
+
+class CityWatcher:
+    """Watches data/city.json for a profile change and hot-swaps the running
+    city: regenerates the GTFS network for the new city, then re-execs this
+    process so all simulators rebuild with the new center. Runs as PID 1 in
+    the container, so execv keeps the container alive."""
+
+    def __init__(self, interval: float = 2.0):
+        self.interval = interval
+        self._seen = self._hash()
+
+    @staticmethod
+    def _hash() -> str | None:
+        try:
+            return hashlib.md5(CITY_FILE.read_bytes()).hexdigest()
+        except OSError:
+            return None
+
+    def run(self, stop: threading.Event) -> None:
+        while not stop.wait(self.interval):
+            h = self._hash()
+            if h is None or h == self._seen:
+                continue
+            self._seen = h
+            log.info("City profile changed -> regenerating GTFS and restarting simulators")
+            try:
+                subprocess.run(
+                    [sys.executable, str(GEN_GTFS), "--city", "city.json"],
+                    cwd=ROOT, check=True, capture_output=True, text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                log.error("GTFS regeneration failed (exit %s): %s", e.returncode, e.stderr.strip())
+                continue
+            os.execv(sys.executable, [sys.executable, "-m", "ingest.producer.run", *sys.argv[1:]])
 
 
 class DuckDbSink:
@@ -75,7 +118,7 @@ def make_sink(config, local: bool):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="CityPulse data simulator")
+    ap = argparse.ArgumentParser(description="Stadtanalyse data simulator")
     ap.add_argument("--local", action="store_true", help="write to local DuckDB instead of Kafka")
     ap.add_argument("--seconds", type=int, default=0, help="stop after N seconds (0 = run forever)")
     ap.add_argument("--vehicles", type=int, default=None, help="override number of vehicles")
@@ -94,6 +137,9 @@ def main() -> int:
     events = CityEventsSimulator(cfg.city, rng=random.Random(33))
 
     stop = threading.Event()
+    if not args.local:
+        threading.Thread(target=CityWatcher().run, args=(stop,), daemon=True,
+                         name="city-watcher").start()
     threads = [
         threading.Thread(target=weather.run, args=(sink, cfg.weather_interval_sec, stop), daemon=True),
         threading.Thread(target=events.run, args=(sink, cfg.events_interval_sec, stop), daemon=True),

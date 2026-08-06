@@ -11,7 +11,7 @@ import pandas as pd
 
 from .config import settings
 
-log = logging.getLogger("citypulse.ml")
+log = logging.getLogger("stadtanalyse.ml")
 
 BUCKET_NAMES = {0: "on_time", 1: "delayed", 2: "severe"}
 

@@ -128,6 +128,18 @@ export interface PredictionRequest {
   stop_zone_num: number;
 }
 
+export interface City {
+  name: string;
+  lat: number;
+  lon: number;
+  agency?: string;
+}
+
+export interface CityCatalog {
+  cities: City[];
+  current: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
@@ -156,6 +168,9 @@ export const api = {
   eventsImpact: () => get<EventImpact[]>("/api/v1/events/impact"),
   pipeline: () => get<PipelineStatus>("/api/v1/monitoring/pipeline"),
   predict: (req: PredictionRequest) => post<Prediction>("/api/v1/ml/predict", req),
+  cities: () => get<CityCatalog>("/api/v1/cities"),
+  cityCurrent: () => get<City>("/api/v1/cities/current"),
+  switchCity: (name: string) => post<{ ok: boolean; city: City }>("/api/v1/cities/switch", { city: name }),
 };
 
 export function positionsStream(onPositions: (p: VehiclePosition[]) => void, onError: () => void): () => void {

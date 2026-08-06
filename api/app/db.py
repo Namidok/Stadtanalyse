@@ -22,7 +22,7 @@ import psycopg2.extras
 
 from .config import pg_url, settings
 
-log = logging.getLogger("citypulse.db")
+log = logging.getLogger("stadtanalyse.db")
 
 
 class DBUnavailable(Exception):

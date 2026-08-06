@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: CityPulse
+  - name: Stadtanalyse
     orgId: 1
-    folder: CityPulse
+    folder: Stadtanalyse
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

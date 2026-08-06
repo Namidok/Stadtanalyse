@@ -75,7 +75,7 @@ def load_data(local: bool) -> pd.DataFrame:
     if local:
         import duckdb
 
-        db = Path(__file__).resolve().parent.parent.parent / "data/local/citypulse.duckdb"
+        db = Path(__file__).resolve().parent.parent.parent / "data/local/stadtanalyse.duckdb"
         con = duckdb.connect(str(db))
         df = con.execute("""
             SELECT json_extract_string(record, '$.delay_seconds') AS delay_seconds,
@@ -105,7 +105,7 @@ def load_data(local: bool) -> pd.DataFrame:
 
     from common import build_session, postgres_properties, postgres_url
 
-    spark = build_session("citypulse-ml-train")
+    spark = build_session("stadtanalyse-ml-train")
     df_spark = (
         spark.read.jdbc(postgres_url(), "gold.ml_features", properties=postgres_properties())
         .limit(100000)

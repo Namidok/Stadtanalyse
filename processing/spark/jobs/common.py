@@ -1,4 +1,4 @@
-"""Shared Spark session bootstrap for CityPulse jobs.
+"""Shared Spark session bootstrap for Stadtanalyse jobs.
 
 Configures Delta Lake, S3A/MinIO access and PostgreSQL JDBC from environment
 variables so jobs run identically on the cluster and in local mode.
@@ -16,8 +16,8 @@ def env(key: str, default: str = "") -> str:
 
 def build_session(app_name: str, *, streaming: bool = False, local: bool = False) -> SparkSession:
     s3_endpoint = env("S3_ENDPOINT", "http://minio:9000")
-    s3_access = env("S3_ACCESS_KEY", "citypulse")
-    s3_secret = env("S3_SECRET_KEY", "citypulse-secret")
+    s3_access = env("S3_ACCESS_KEY", "stadtanalyse")
+    s3_secret = env("S3_SECRET_KEY", "stadtanalyse-secret")
 
     builder = (
         SparkSession.builder.appName(app_name)
@@ -47,14 +47,14 @@ def build_session(app_name: str, *, streaming: bool = False, local: bool = False
 def postgres_url() -> str:
     host = env("POSTGRES_HOST", "postgres")
     port = env("POSTGRES_PORT", "5432")
-    db = env("POSTGRES_DB", "citypulse")
+    db = env("POSTGRES_DB", "stadtanalyse")
     return f"jdbc:postgresql://{host}:{port}/{db}"
 
 
 def postgres_properties() -> dict:
     return {
-        "user": env("POSTGRES_USER", "citypulse"),
-        "password": env("POSTGRES_SECRET", env("POSTGRES_PASSWORD", "citypulse-secret")),
+        "user": env("POSTGRES_USER", "stadtanalyse"),
+        "password": env("POSTGRES_SECRET", env("POSTGRES_PASSWORD", "stadtanalyse-secret")),
         "driver": "org.postgresql.Driver",
     }
 

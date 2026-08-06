@@ -1,11 +1,11 @@
-"""CityPulse batch pipeline DAG.
+"""Stadtanalyse batch pipeline DAG.
 
 Orchestrates the Gold-layer refresh:
   Spark (bronze -> silver, Delta + Postgres) -> Great Expectations quality checks
   -> dbt (Gold marts) -> XGBoost retraining.
 
 Each step runs as its own container through the Docker daemon (the same
-compose-built images used by `make jobs`), attached to the citypulse_default
+compose-built images used by `make jobs`), attached to the stadtanalyse_default
 network so they can reach Kafka, MinIO and Postgres by service name.
 """
 from __future__ import annotations
@@ -17,30 +17,30 @@ from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 
-NETWORK = os.environ.get("CITYPULSE_NETWORK", "citypulse_default")
-ML_VOLUME = os.environ.get("CITYPULSE_ML_VOLUME", "citypulse_ml_artifacts")
+NETWORK = os.environ.get("STADTANALYSE_NETWORK", "stadtanalyse_default")
+ML_VOLUME = os.environ.get("STADTANALYSE_ML_VOLUME", "stadtanalyse_ml_artifacts")
 
-SPARK_IMAGE = os.environ.get("CITYPULSE_SPARK_IMAGE", "citypulse/spark:3.5.4")
-QUALITY_IMAGE = os.environ.get("CITYPULSE_QUALITY_IMAGE", "citypulse/quality:1.0")
-DBT_IMAGE = os.environ.get("CITYPULSE_DBT_IMAGE", "citypulse/dbt:1.0")
+SPARK_IMAGE = os.environ.get("STADTANALYSE_SPARK_IMAGE", "stadtanalyse/spark:3.5.4")
+QUALITY_IMAGE = os.environ.get("STADTANALYSE_QUALITY_IMAGE", "stadtanalyse/quality:1.0")
+DBT_IMAGE = os.environ.get("STADTANALYSE_DBT_IMAGE", "stadtanalyse/dbt:1.0")
 
 SHARED_ENV = {
     "S3_ENDPOINT": os.environ.get("S3_ENDPOINT", "http://minio:9000"),
-    "S3_ACCESS_KEY": os.environ.get("S3_ACCESS_KEY", "citypulse"),
-    "S3_SECRET_KEY": os.environ.get("S3_SECRET_KEY", "citypulse-secret"),
+    "S3_ACCESS_KEY": os.environ.get("S3_ACCESS_KEY", "stadtanalyse"),
+    "S3_SECRET_KEY": os.environ.get("S3_SECRET_KEY", "stadtanalyse-secret"),
     "S3_PATH_STYLE_ACCESS": "true",
     "KAFKA_BOOTSTRAP_SERVERS": os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
     "DELTA_TABLE_PREFIX": os.environ.get("DELTA_TABLE_PREFIX", "s3a://warehouse"),
     "POSTGRES_HOST": os.environ.get("POSTGRES_HOST", "postgres"),
     "POSTGRES_PORT": os.environ.get("POSTGRES_PORT", "5432"),
-    "POSTGRES_USER": os.environ.get("POSTGRES_USER", "citypulse"),
-    "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "citypulse-secret"),
-    "POSTGRES_DB": os.environ.get("POSTGRES_DB", "citypulse"),
+    "POSTGRES_USER": os.environ.get("POSTGRES_USER", "stadtanalyse"),
+    "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "stadtanalyse-secret"),
+    "POSTGRES_DB": os.environ.get("POSTGRES_DB", "stadtanalyse"),
     "SPARK_MASTER_URL": os.environ.get("SPARK_MASTER_URL", "spark://spark-master:7077"),
 }
 
 DEFAULTS = {
-    "owner": "citypulse",
+    "owner": "stadtanalyse",
     "retries": 1,
     "retry_delay": timedelta(seconds=45),
     "start_date": datetime(2026, 1, 1),
@@ -48,11 +48,11 @@ DEFAULTS = {
 }
 
 with DAG(
-    "citypulse_batch_pipeline",
+    "stadtanalyse_batch_pipeline",
     schedule_interval="*/15 * * * *",
     catchup=False,
     description="Spark silver -> quality -> dbt gold -> ML retrain",
-    tags=["citypulse", "batch", "gold-layer"],
+    tags=["stadtanalyse", "batch", "gold-layer"],
     default_args=DEFAULTS,
 ) as dag:
 

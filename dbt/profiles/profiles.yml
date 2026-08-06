@@ -1,21 +1,21 @@
-citypulse:
+stadtanalyse:
   target: "{{ env_var('DBT_TARGET', 'prod') }}"
   outputs:
     prod:
       type: postgres
       host: "{{ env_var('POSTGRES_HOST', 'postgres') }}"
       port: "{{ env_var('POSTGRES_PORT', '5432') | int }}"
-      user: "{{ env_var('POSTGRES_USER', 'citypulse') }}"
-      password: "{{ env_var('POSTGRES_PASSWORD', 'citypulse-secret') }}"
-      dbname: "{{ env_var('POSTGRES_DB', 'citypulse') }}"
+      user: "{{ env_var('POSTGRES_USER', 'stadtanalyse') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'stadtanalyse-secret') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'stadtanalyse') }}"
       schema: gold
       threads: 4
     local:
       type: postgres
       host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
       port: "{{ env_var('POSTGRES_PORT', '5432') | int }}"
-      user: "{{ env_var('POSTGRES_USER', 'citypulse') }}"
-      password: "{{ env_var('POSTGRES_PASSWORD', 'citypulse-secret') }}"
-      dbname: "{{ env_var('POSTGRES_DB', 'citypulse') }}"
+      user: "{{ env_var('POSTGRES_USER', 'stadtanalyse') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'stadtanalyse-secret') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'stadtanalyse') }}"
       schema: gold
       threads: 4

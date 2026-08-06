@@ -1,4 +1,4 @@
-# CityPulse Spark worker image
+# Stadtanalyse Spark worker image
 # Spark 3.5.4 + Delta Lake 3.2.1 + Kafka + S3A/MinIO + PostgreSQL JDBC
 FROM bitnamilegacy/spark:3.5.4
 

@@ -1,28 +1,28 @@
 # =============================================================================
-# CityPulse - Smart Urban Mobility Data Lake & Analytics Platform
+# Stadtanalyse - Smart Urban Mobility Data Lake & Analytics Platform
 # Full stack: Kafka -> Spark(Delta) -> dbt/Gold -> Postgres -> FastAPI -> React
 # Orchestration: Airflow | Observability: Prometheus + Grafana
 # =============================================================================
-name: citypulse
+name: stadtanalyse
 
 x-common-spark: &spark-common
   build:
     context: .
     dockerfile: processing/spark/Dockerfile
-  image: citypulse/spark:3.5.4
+  image: stadtanalyse/spark:3.5.4
   environment: &spark-env
     S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
-    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-citypulse}
-    S3_SECRET_KEY: ${S3_SECRET_KEY:-citypulse-secret}
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-stadtanalyse}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:-stadtanalyse-secret}
     S3_PATH_STYLE_ACCESS: "true"
     KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
     DELTA_CHECKPOINT_BASE: ${DELTA_CHECKPOINT_BASE:-/opt/spark/work-dir/checkpoints}
     DELTA_TABLE_PREFIX: ${DELTA_TABLE_PREFIX:-s3a://warehouse}
     POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
     POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-    POSTGRES_USER: ${POSTGRES_USER:-citypulse}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
-    POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+    POSTGRES_USER: ${POSTGRES_USER:-stadtanalyse}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stadtanalyse-secret}
+    POSTGRES_DB: ${POSTGRES_DB:-stadtanalyse}
     SPARK_RPC_AUTHENTICATION_ENABLED: "no"
     SPARK_RPC_ENCRYPTION_ENABLED: "no"
     SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
@@ -105,8 +105,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-citypulse}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-citypulse-secret}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-stadtanalyse}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-stadtanalyse-secret}
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -128,8 +128,8 @@ services:
         mc mb --ignore-existing local/artifacts || true
         echo "Buckets ready"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-citypulse}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-citypulse-secret}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-stadtanalyse}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-stadtanalyse-secret}
 
   # ---------------------------------------------------------------------------
   # Serving database
@@ -139,11 +139,11 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
-      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+      POSTGRES_USER: ${POSTGRES_USER:-stadtanalyse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stadtanalyse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-stadtanalyse}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-citypulse} -d ${POSTGRES_DB:-citypulse}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stadtanalyse} -d ${POSTGRES_DB:-stadtanalyse}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -191,7 +191,7 @@ services:
     build:
       context: .
       dockerfile: ingest/Dockerfile
-    image: citypulse/producer:1.0
+    image: stadtanalyse/producer:1.0
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SIM_VEHICLES: ${SIM_VEHICLES:-40}
@@ -202,6 +202,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     profiles: ["ingest"]
+    volumes:
+      - ./data:/app/data
 
   spark-run:
     <<: *spark-common
@@ -217,16 +219,16 @@ services:
     build:
       context: ./quality
       dockerfile: Dockerfile
-    image: citypulse/quality:1.0
+    image: stadtanalyse/quality:1.0
     environment:
       S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-citypulse}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-citypulse-secret}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-stadtanalyse}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-stadtanalyse-secret}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
-      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+      POSTGRES_USER: ${POSTGRES_USER:-stadtanalyse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stadtanalyse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-stadtanalyse}
     depends_on:
       - minio
     profiles: ["jobs"]
@@ -238,15 +240,15 @@ services:
     build:
       context: ./dbt
       dockerfile: Dockerfile
-    image: citypulse/dbt:1.0
+    image: stadtanalyse/dbt:1.0
     environment:
       DBT_PROFILES_DIR: /usr/app/profiles
       DBT_PROJECT_DIR: /usr/app/project
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
-      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+      POSTGRES_USER: ${POSTGRES_USER:-stadtanalyse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stadtanalyse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-stadtanalyse}
     depends_on:
       postgres:
         condition: service_healthy
@@ -274,15 +276,15 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    image: citypulse/api:1.0
+    image: stadtanalyse/api:1.0
     ports:
       - "8000:8000"
     environment:
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
-      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+      POSTGRES_USER: ${POSTGRES_USER:-stadtanalyse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stadtanalyse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-stadtanalyse}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       KAFKA_TOPIC_TRANSPORT: ${KAFKA_TOPIC_TRANSPORT:-raw.transport.vehicle.positions}
       KAFKA_TOPIC_TRIP_UPDATES: ${KAFKA_TOPIC_TRIP_UPDATES:-raw.transport.trip.updates}
@@ -291,17 +293,19 @@ services:
       ML_MODEL_PATH: /opt/ml/model/model.joblib
       ML_FEATURES_PATH: /opt/ml/model/features.json
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-*}
+      STADTANALYSE_DATA_DIR: /app/data
     depends_on:
       - postgres
       - kafka
     volumes:
       - ml_artifacts:/opt/ml/model
+      - ./data:/app/data
 
   web:
     build:
       context: ./web
       dockerfile: Dockerfile
-    image: citypulse/web:1.0
+    image: stadtanalyse/web:1.0
     ports:
       - "3000:80"
     environment:
@@ -320,13 +324,13 @@ services:
     environment: &airflow-env
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-citypulse}:${POSTGRES_PASSWORD:-citypulse-secret}@postgres:5432/${POSTGRES_DB:-citypulse}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-stadtanalyse}:${POSTGRES_PASSWORD:-stadtanalyse-secret}@postgres:5432/${POSTGRES_DB:-stadtanalyse}
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-dGp5dFZ5UnJuQ0x4NWFkU3R5Z2hrTHZhR2VzV1g2cVRlblhRcXhFdmFURD0=}
       _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-apache-airflow-providers-docker=3.13.0}
     command: >
       bash -c "airflow db upgrade &&
-               airflow users create --username admin --firstname CityPulse --lastname Admin --role Admin --email admin@citypulse.local --password admin &&
+               airflow users create --username admin --firstname Stadtanalyse --lastname Admin --role Admin --email admin@stadtanalyse.local --password admin &&
                echo Airflow init complete"
     restart: on-failure
     volumes:
@@ -382,7 +386,7 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-citypulse}:${POSTGRES_PASSWORD:-citypulse-secret}@postgres:5432/${POSTGRES_DB:-citypulse}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-stadtanalyse}:${POSTGRES_PASSWORD:-stadtanalyse-secret}@postgres:5432/${POSTGRES_DB:-stadtanalyse}?sslmode=disable"
     depends_on:
       postgres:
         condition: service_healthy
@@ -422,4 +426,4 @@ volumes:
 
 networks:
   default:
-    name: citypulse_default
+    name: stadtanalyse_default

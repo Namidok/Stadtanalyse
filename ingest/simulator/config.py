@@ -29,8 +29,8 @@ class CityProfile:
         p = path or ROOT / "data" / "city.json"
         if p.exists():
             data = json.loads(p.read_text())
-            return cls(name=data["name"], lat=data["lat"], lon=data["lon"], agency=data.get("agency", "CityPulse Transit"))
-        return cls(name="Berlin", lat=52.52, lon=13.405, agency="CityPulse Transit")
+            return cls(name=data["name"], lat=data["lat"], lon=data["lon"], agency=data.get("agency", "Stadtanalyse Transit"))
+        return cls(name="Berlin", lat=52.52, lon=13.405, agency="Stadtanalyse Transit")
 
 
 @dataclass
@@ -52,7 +52,7 @@ class SimConfig:
 
     # Local offline mode
     local: bool = False
-    local_db: Path = ROOT / "data" / "local" / "citypulse.duckdb"
+    local_db: Path = ROOT / "data" / "local" / "stadtanalyse.duckdb"
     local_limit_seconds: int = 300
     fast_factor: float = field(default_factory=lambda: float(_env("SIM_FAST_FACTOR", "1.0")))
 

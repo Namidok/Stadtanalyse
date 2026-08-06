@@ -1,1 +1,1 @@
-"""CityPulse - data ingestion (simulators + Kafka producers)."""
+"""Stadtanalyse - data ingestion (simulators + Kafka producers)."""

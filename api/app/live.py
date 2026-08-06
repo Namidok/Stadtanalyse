@@ -14,7 +14,7 @@ from kafka import KafkaConsumer
 
 from .config import settings
 
-log = logging.getLogger("citypulse.live")
+log = logging.getLogger("stadtanalyse.live")
 
 WINDOW_SIZE = 5000
 
@@ -64,13 +64,13 @@ class LiveStore:
 
     def _seed_local_demo(self) -> None:
         """When no Kafka broker is reachable, load the offline demo snapshot
-        (data/local/citypulse.duckdb) so the dashboard works end-to-end."""
+        (data/local/stadtanalyse.duckdb) so the dashboard works end-to-end."""
         if self._seeded:
             return
         try:
             import duckdb
 
-            db = Path(__file__).resolve().parents[2] / "data/local/citypulse.duckdb"
+            db = Path(__file__).resolve().parents[2] / "data/local/stadtanalyse.duckdb"
             if not db.exists():
                 log.info("No local demo snapshot found at %s", db)
                 return

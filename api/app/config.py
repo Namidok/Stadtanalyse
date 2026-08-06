@@ -1,8 +1,18 @@
-"""Application configuration for the CityPulse API."""
+"""Application configuration for the Stadtanalyse API."""
 from __future__ import annotations
 
 import os
 from functools import lru_cache
+from pathlib import Path
+
+
+def data_dir() -> Path:
+    """Directory holding data/city.json + data/cities.json. Overridable for
+    Docker (shared ./data volume mounted at /app/data)."""
+    d = os.environ.get("STADTANALYSE_DATA_DIR")
+    if d:
+        return Path(d)
+    return Path(__file__).resolve().parents[2] / "data"
 
 
 @lru_cache
@@ -10,9 +20,9 @@ def settings() -> dict:
     return {
         "postgres_host": os.environ.get("POSTGRES_HOST", "postgres"),
         "postgres_port": os.environ.get("POSTGRES_PORT", "5432"),
-        "postgres_user": os.environ.get("POSTGRES_USER", "citypulse"),
-        "postgres_password": os.environ.get("POSTGRES_PASSWORD", "citypulse-secret"),
-        "postgres_db": os.environ.get("POSTGRES_DB", "citypulse"),
+        "postgres_user": os.environ.get("POSTGRES_USER", "stadtanalyse"),
+        "postgres_password": os.environ.get("POSTGRES_PASSWORD", "stadtanalyse-secret"),
+        "postgres_db": os.environ.get("POSTGRES_DB", "stadtanalyse"),
         "kafka_bootstrap": os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
         "topic_transport": os.environ.get("KAFKA_TOPIC_TRANSPORT", "raw.transport.vehicle.positions"),
         "topic_trip_updates": os.environ.get("KAFKA_TOPIC_TRIP_UPDATES", "raw.transport.trip.updates"),

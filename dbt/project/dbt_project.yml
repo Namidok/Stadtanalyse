@@ -1,7 +1,7 @@
-name: "citypulse"
+name: "stadtanalyse"
 version: "1.0.0"
 config-version: 2
-profile: "citypulse"
+profile: "stadtanalyse"
 
 model-paths: ["models"]
 seed-paths: ["seeds"]
@@ -21,7 +21,7 @@ vars:
   severe_delay_threshold_seconds: 600
 
 models:
-  citypulse:
+  stadtanalyse:
     staging:
       +schema: staging
       +materialized: view
@@ -32,10 +32,10 @@ models:
         +materialized: table
 
 seeds:
-  citypulse:
+  stadtanalyse:
     +schema: silver
     +quote_columns: false
 
 data_tests:
-  citypulse:
+  stadtanalyse:
     +severity: warn

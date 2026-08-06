@@ -1,4 +1,4 @@
--- CityPulse serving database bootstrap.
+-- Stadtanalyse serving database bootstrap.
 -- Creates the schemas used by the medallion architecture:
 --   silver  -> Spark cleansed layer (JDBC export) + dbt seeds
 --   staging -> dbt staging views

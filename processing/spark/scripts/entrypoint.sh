@@ -9,7 +9,7 @@ MASTER="${SPARK_MASTER_URL:-spark://spark-master:7077}"
 DRIVER_MEM="${SPARK_DRIVER_MEMORY:-1g}"
 EXEC_MEM="${SPARK_EXECUTOR_MEMORY:-1g}"
 
-echo ">>> CityPulse Spark job: $JOB (master=$MASTER)"
+echo ">>> Stadtanalyse Spark job: $JOB (master=$MASTER)"
 cd /opt/spark/work-dir
 
 exec spark-submit \
@@ -18,8 +18,8 @@ exec spark-submit \
   --driver-memory "$DRIVER_MEM" \
   --executor-memory "$EXEC_MEM" \
   --conf spark.hadoop.fs.s3a.endpoint="${S3_ENDPOINT:-http://minio:9000}" \
-  --conf spark.hadoop.fs.s3a.access.key="${S3_ACCESS_KEY:-citypulse}" \
-  --conf spark.hadoop.fs.s3a.secret.key="${S3_SECRET_KEY:-citypulse-secret}" \
+  --conf spark.hadoop.fs.s3a.access.key="${S3_ACCESS_KEY:-stadtanalyse}" \
+  --conf spark.hadoop.fs.s3a.secret.key="${S3_SECRET_KEY:-stadtanalyse-secret}" \
   --conf spark.hadoop.fs.s3a.path.style.access=true \
   --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
   --conf spark.delta.logStore.class=io.delta.storage.S3SingleDriverLogStore \

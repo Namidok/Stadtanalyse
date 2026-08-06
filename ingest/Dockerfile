@@ -6,6 +6,7 @@ COPY ingest/requirements.txt ./ingest/requirements.txt
 RUN pip install --no-cache-dir -r ingest/requirements.txt
 
 COPY ingest ./ingest
+COPY scripts ./scripts
 COPY data ./data
 
 ENV PYTHONPATH=/app

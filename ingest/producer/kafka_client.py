@@ -7,7 +7,7 @@ import time
 
 from kafka import KafkaProducer
 
-log = logging.getLogger("citypulse.ingest")
+log = logging.getLogger("stadtanalyse.ingest")
 
 TOPIC_MAP = {
     "transport": "raw.transport.vehicle.positions",

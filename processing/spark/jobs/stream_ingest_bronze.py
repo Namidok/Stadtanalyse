@@ -19,7 +19,7 @@ from pyspark.sql.types import (
 from common import build_session, s3_path
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("citypulse.stream")
+log = logging.getLogger("stadtanalyse.stream")
 
 SCHEMAS: dict[str, StructType] = {
     "transport": StructType([
@@ -88,7 +88,7 @@ TOPICS = [
 
 
 def main():
-    spark = build_session("citypulse-stream-bronze", streaming=True)
+    spark = build_session("stadtanalyse-stream-bronze", streaming=True)
 
     for topic, schema_key, table in TOPICS:
         schema = SCHEMAS[schema_key]

@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/components/charts.tsx","./src/components/kpi.tsx","./src/components/livemap.tsx","./src/components/mlpanel.tsx","./src/components/panels.tsx","./src/components/pipelinepanel.tsx"],"version":"5.6.3"}

@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: fct_trip_delays
+    description: "Stop-level trip delay facts enriched with route, weather and event context."
+    columns:
+      - name: trip_id
+        tests: [not_null]
+      - name: stop_id
+        tests: [not_null]
+      - name: delay_seconds
+        tests:
+          - not_null
+      - name: delay_bucket
+        tests:
+          - accepted_values:
+              values: ["on_time", "delayed", "severe"]
+      - name: route_id
+        tests: [not_null]
+
+  - name: fct_vehicle_positions
+    description: "Vehicle position facts with grid cell + weather context."
+    columns:
+      - name: vehicle_id
+        tests: [not_null]
+      - name: grid_cell
+        tests: [not_null]
+
+  - name: mart_route_reliability
+    description: "Daily per-route reliability metrics."
+    columns:
+      - name: route_id
+        tests: [not_null]
+      - name: on_time_pct
+        tests:
+          - not_null
+          - greater_than_equal_zero
+
+  - name: mart_congestion_hotspots
+    description: "Grid cells ranked by average delay."
+    columns:
+      - name: grid_cell
+        tests: [not_null]
+
+  - name: mart_delay_trends
+    description: "Hourly network delay trends."
+    columns:
+      - name: hour_of_day
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]

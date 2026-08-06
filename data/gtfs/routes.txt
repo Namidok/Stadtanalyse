@@ -1,0 +1,12 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_mode
+R1,CityPulse Transit,R1,R1 line,1,rail
+R2,CityPulse Transit,R2,R2 line,1,rail
+R3,CityPulse Transit,R3,R3 line,0,tram
+R4,CityPulse Transit,R4,R4 line,0,tram
+R5,CityPulse Transit,R5,R5 line,3,bus
+R6,CityPulse Transit,R6,R6 line,3,bus
+R7,CityPulse Transit,R7,R7 line,3,bus
+R8,CityPulse Transit,R8,R8 line,3,bus
+R9,CityPulse Transit,R9,R9 line,1,rail
+B1,CityPulse Transit,B1,B1 line,3,bus
+B2,CityPulse Transit,B2,B2 line,3,bus

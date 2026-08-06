@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# dbt
+dbt/project/target/
+dbt/project/logs/
+dbt/project/dbt_packages/
+
+# ML artifacts
+ml/model/*.joblib
+ml/model/*.json
+ml/model/*.pkl
+
+# Great Expectations
+quality/great_expectations/uncommitted/
+quality/great_expectations/.gitignore
+quality/result/
+
+# Data / local artifacts
+data/local/
+*.parquet
+*.duckdb
+*.db
+*.sqlite3
+
+# Env / secrets
+.env
+*.env.local
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Spark
+checkpoints/
+spark-warehouse/

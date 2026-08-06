@@ -1,0 +1,425 @@
+# =============================================================================
+# CityPulse - Smart Urban Mobility Data Lake & Analytics Platform
+# Full stack: Kafka -> Spark(Delta) -> dbt/Gold -> Postgres -> FastAPI -> React
+# Orchestration: Airflow | Observability: Prometheus + Grafana
+# =============================================================================
+name: citypulse
+
+x-common-spark: &spark-common
+  build:
+    context: .
+    dockerfile: processing/spark/Dockerfile
+  image: citypulse/spark:3.5.4
+  environment: &spark-env
+    S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-citypulse}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:-citypulse-secret}
+    S3_PATH_STYLE_ACCESS: "true"
+    KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+    DELTA_CHECKPOINT_BASE: ${DELTA_CHECKPOINT_BASE:-/opt/spark/work-dir/checkpoints}
+    DELTA_TABLE_PREFIX: ${DELTA_TABLE_PREFIX:-s3a://warehouse}
+    POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+    POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+    POSTGRES_USER: ${POSTGRES_USER:-citypulse}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
+    POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+    SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+    SPARK_RPC_ENCRYPTION_ENABLED: "no"
+    SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+    SPARK_MASTER_URL: spark://spark-master:7077
+    SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-1g}
+    SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY:-1g}
+  depends_on:
+    kafka:
+      condition: service_started
+    minio:
+      condition: service_started
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Streaming backbone
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: bitnamilegacy/kafka:3.7.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - kafka_data:/bitnami/kafka
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      - kafka
+
+  kafka-init:
+    image: bitnamilegacy/kafka:3.7.0
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        TOPICS="raw.transport.vehicle.positions raw.transport.trip.updates raw.weather.observations raw.city.events"
+        for t in $TOPICS; do
+          echo "Creating topic $t"
+          kafka-topics.sh --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS --create --if-not-exists \
+            --topic $t --partitions 3 --replication-factor 1 || echo "topic $t exists"
+        done
+        echo "Topics ready"
+        kafka-topics.sh --bootstrap-server $KAFKA_BOOTSTRAP_SERVERS --list
+
+  # ---------------------------------------------------------------------------
+  # Object storage (S3 compatible) - Delta Lake warehouse + artifacts
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-citypulse}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-citypulse-secret}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set local http://minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD; do sleep 2; done
+        mc mb --ignore-existing local/warehouse || true
+        mc mb --ignore-existing local/artifacts || true
+        echo "Buckets ready"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-citypulse}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-citypulse-secret}
+
+  # ---------------------------------------------------------------------------
+  # Serving database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-citypulse} -d ${POSTGRES_DB:-citypulse}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+
+  # ---------------------------------------------------------------------------
+  # Spark cluster (batch + streaming) writing Delta Lake to MinIO
+  # ---------------------------------------------------------------------------
+  spark-master:
+    <<: *spark-common
+    command: ["/opt/bitnami/scripts/spark/run.sh"]
+    environment:
+      <<: *spark-env
+      SPARK_MODE: master
+      SPARK_DAEMON_JAVA_OPTS: "-Dspark.ui.port=8080"
+    ports:
+      - "8082:8080"
+
+  spark-worker:
+    <<: *spark-common
+    command: ["/opt/bitnami/scripts/spark/run.sh"]
+    environment:
+      <<: *spark-env
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: ${SPARK_EXECUTOR_MEMORY:-2g}
+      SPARK_WORKER_CORES: 2
+    depends_on:
+      - spark-master
+
+  spark-streaming:
+    <<: *spark-common
+    command:
+      - /opt/spark/work-dir/scripts/entrypoint.sh
+      - stream_ingest_bronze.py
+    volumes:
+      - spark_checkpoints:/opt/spark/work-dir/checkpoints
+
+  # ---------------------------------------------------------------------------
+  # Real-time simulators publishing to Kafka
+  # ---------------------------------------------------------------------------
+  producer:
+    build:
+      context: .
+      dockerfile: ingest/Dockerfile
+    image: citypulse/producer:1.0
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      SIM_VEHICLES: ${SIM_VEHICLES:-40}
+      SIM_UPDATE_INTERVAL_SEC: ${SIM_UPDATE_INTERVAL_SEC:-2}
+      SIM_FAST_FACTOR: ${SIM_FAST_FACTOR:-1.0}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: ["ingest"]
+
+  spark-run:
+    <<: *spark-common
+    profiles: ["jobs"]
+    command:
+      - /opt/spark/work-dir/scripts/entrypoint.sh
+      - ${SPARK_JOB:-batch_bronze_to_silver.py}
+
+  # ---------------------------------------------------------------------------
+  # Data quality (Great Expectations)
+  # ---------------------------------------------------------------------------
+  quality:
+    build:
+      context: ./quality
+      dockerfile: Dockerfile
+    image: citypulse/quality:1.0
+    environment:
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-citypulse}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-citypulse-secret}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+    depends_on:
+      - minio
+    profiles: ["jobs"]
+
+  # ---------------------------------------------------------------------------
+  # Analytics warehouse (dbt -> PostgreSQL)
+  # ---------------------------------------------------------------------------
+  dbt:
+    build:
+      context: ./dbt
+      dockerfile: Dockerfile
+    image: citypulse/dbt:1.0
+    environment:
+      DBT_PROFILES_DIR: /usr/app/profiles
+      DBT_PROJECT_DIR: /usr/app/project
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["jobs"]
+
+  # ---------------------------------------------------------------------------
+  # ML model training & serving
+  # ---------------------------------------------------------------------------
+  ml-train:
+    <<: *spark-common
+    command: ["/opt/spark/work-dir/scripts/run_train.sh"]
+    volumes:
+      - ml_artifacts:/opt/ml/model
+    environment:
+      <<: *spark-env
+      ML_MODEL_PATH: /opt/ml/model/model.joblib
+      ML_FEATURES_PATH: /opt/ml/model/features.json
+      ML_METRICS_PATH: /opt/ml/model/metrics.json
+    profiles: ["jobs"]
+
+  # ---------------------------------------------------------------------------
+  # API + Web
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: citypulse/api:1.0
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-citypulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citypulse-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-citypulse}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_TOPIC_TRANSPORT: ${KAFKA_TOPIC_TRANSPORT:-raw.transport.vehicle.positions}
+      KAFKA_TOPIC_TRIP_UPDATES: ${KAFKA_TOPIC_TRIP_UPDATES:-raw.transport.trip.updates}
+      KAFKA_TOPIC_WEATHER: ${KAFKA_TOPIC_WEATHER:-raw.weather.observations}
+      KAFKA_TOPIC_EVENTS: ${KAFKA_TOPIC_EVENTS:-raw.city.events}
+      ML_MODEL_PATH: /opt/ml/model/model.joblib
+      ML_FEATURES_PATH: /opt/ml/model/features.json
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-*}
+    depends_on:
+      - postgres
+      - kafka
+    volumes:
+      - ml_artifacts:/opt/ml/model
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: citypulse/web:1.0
+    ports:
+      - "3000:80"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - api
+
+  # ---------------------------------------------------------------------------
+  # Orchestration (Airflow)
+  # ---------------------------------------------------------------------------
+  airflow-init:
+    image: apache/airflow:2.10.5-python3.11
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &airflow-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-citypulse}:${POSTGRES_PASSWORD:-citypulse-secret}@postgres:5432/${POSTGRES_DB:-citypulse}
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-dGp5dFZ5UnJuQ0x4NWFkU3R5Z2hrTHZhR2VzV1g2cVRlblhRcXhFdmFURD0=}
+      _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-apache-airflow-providers-docker=3.13.0}
+    command: >
+      bash -c "airflow db upgrade &&
+               airflow users create --username admin --firstname CityPulse --lastname Admin --role Admin --email admin@citypulse.local --password admin &&
+               echo Airflow init complete"
+    restart: on-failure
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.5-python3.11
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    command: scheduler
+    restart: on-failure
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+      - airflow_logs:/opt/airflow/logs
+
+  airflow-webserver:
+    image: apache/airflow:2.10.5-python3.11
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: on-failure
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
+      - airflow_logs:/opt/airflow/logs
+
+  # ---------------------------------------------------------------------------
+  # Observability
+  # ---------------------------------------------------------------------------
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    command: ["--kafka.server=kafka:9092"]
+    depends_on:
+      - kafka
+    ports:
+      - "9308:9308"
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    ports:
+      - "9100:9100"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-citypulse}:${POSTGRES_PASSWORD:-citypulse-secret}@postgres:5432/${POSTGRES_DB:-citypulse}?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9187:9187"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  kafka_data:
+  minio_data:
+  postgres_data:
+  spark_checkpoints:
+  ml_artifacts:
+  prometheus_data:
+  grafana_data:
+  airflow_logs:
+
+networks:
+  default:
+    name: citypulse_default

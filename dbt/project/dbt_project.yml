@@ -1,0 +1,41 @@
+name: "citypulse"
+version: "1.0.0"
+config-version: 2
+profile: "citypulse"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+target-path: "target"
+log-path: "logs"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  city_lat: 52.52
+  city_lon: 13.405
+  on_time_threshold_seconds: 120
+  severe_delay_threshold_seconds: 600
+
+models:
+  citypulse:
+    staging:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: gold
+      +materialized: table
+      dims:
+        +materialized: table
+
+seeds:
+  citypulse:
+    +schema: silver
+    +quote_columns: false
+
+data_tests:
+  citypulse:
+    +severity: warn

@@ -1,0 +1,52 @@
+{
+  "name": "weather_observations",
+  "id": null,
+  "expectations": [
+    {
+      "type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "zone_id"
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "temperature_c",
+        "min_value": -50.0,
+        "max_value": 60.0
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "humidity_pct",
+        "min_value": 0.0,
+        "max_value": 100.0
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "condition",
+        "value_set": [
+          "clear",
+          "clouds",
+          "rain",
+          "snow",
+          "fog",
+          "storm",
+          "sleet",
+          "unknown"
+        ]
+      },
+      "meta": {}
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "1.1.0"
+  },
+  "notes": null
+}

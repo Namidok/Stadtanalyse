@@ -1,0 +1,92 @@
+{
+  "name": "transport_positions",
+  "id": null,
+  "expectations": [
+    {
+      "type": "expect_table_columns_to_match_ordered_list",
+      "kwargs": {
+        "column_list": [
+          "vehicle_id",
+          "route_id",
+          "route_mode",
+          "trip_id",
+          "direction_id",
+          "stop_id",
+          "next_stop_id",
+          "lat",
+          "lon",
+          "speed_kmh",
+          "heading_deg",
+          "delay_seconds",
+          "congestion_level",
+          "event_ts",
+          "ingested_ts",
+          "processed_ts"
+        ]
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "vehicle_id"
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "route_id"
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "lat",
+        "min_value": -90.0,
+        "max_value": 90.0
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "lon",
+        "min_value": -180.0,
+        "max_value": 180.0
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "speed_kmh",
+        "min_value": 0.0,
+        "max_value": 150.0
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "delay_seconds",
+        "min_value": -120.0,
+        "max_value": 3600.0
+      },
+      "meta": {}
+    },
+    {
+      "type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "lat",
+        "type_": "float64"
+      },
+      "meta": {}
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "1.1.0"
+  },
+  "notes": null
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Stadtanalyse API (FastAPI, DuckDB demo mode)
+After=network.target
+
+[Service]
+Type=simple
+User=stadtanalyse
+Group=stadtanalyse
+WorkingDirectory=/opt/stadtanalyse/api
+Environment=API_MEMORY_MODE=1
+Environment=STADTANALYSE_DATA_SOURCE=synthetic
+Environment=KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092
+ExecStart=/opt/stadtanalyse/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

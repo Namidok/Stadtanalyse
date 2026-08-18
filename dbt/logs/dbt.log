@@ -1,0 +1,8 @@
+==================== 2026-08-18T12:02:47.878652Z | 01a014c0-b1c5-7910-987d-df1ac061c55e ====================
+12:02:47.878990 [info ]: dbt-core 2.0.0-alpha.5
+12:02:47.879544 [info ]: Started loading project
+12:02:47.879885 [info ]: Finished loading project [  0.00s]
+12:02:47.880074 [error]: [IoError (dbt1001)]: Cannot open file /Users/srikarkodi/Downloads/GitHub/smart-urban-mobility/dbt/dbt_project.yml: Failed to open file: /Users/srikarkodi/Downloads/GitHub/smart-urban-mobility/dbt/dbt_project.yml: No such file or directory (os error 2): No such file or directory (os error 2)
+12:02:48.058813 [info ]: 
+==================== Execution Summary =====================
+Finished 'debug' with 1 error for target 'snowflake' [180ms]

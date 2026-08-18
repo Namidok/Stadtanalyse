@@ -16,4 +16,4 @@ SELECT
     ingested_ts,
     dqr_valid
 FROM src
-WHERE dqr_valid IS TRUE
+WHERE dqr_valid = TRUE

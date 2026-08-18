@@ -19,3 +19,14 @@ stadtanalyse:
       dbname: "{{ env_var('POSTGRES_DB', 'stadtanalyse') }}"
       schema: gold
       threads: 4
+    snowflake:
+      type: snowflake
+      account: FIJWPUK-UL40212
+      user: SRIKARKODI
+      authenticator: programmatic_access_token
+      token: "{{ env_var('SNOWFLAKE_PAT') }}"
+      role: ACCOUNTADMIN
+      database: STADTANALYSE
+      warehouse: COMPUTE_WH
+      schema: GOLD
+      threads: 4

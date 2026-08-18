@@ -14,7 +14,8 @@ models:
       - name: delay_bucket
         tests:
           - accepted_values:
-              values: ["on_time", "delayed", "severe"]
+              arguments:
+                values: ["on_time", "delayed", "severe"]
       - name: route_id
         tests: [not_null]
 
@@ -49,4 +50,5 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]

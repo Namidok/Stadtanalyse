@@ -9,7 +9,11 @@ SELECT
     ROUND(MAX(precipitation_mm)::numeric, 2) AS max_precipitation_mm,
     ROUND(AVG(wind_speed_kmh)::numeric, 2) AS wind_speed_kmh,
     ROUND(AVG(humidity_pct)::numeric, 2) AS humidity_pct,
+{% if target.type == 'snowflake' %}
     (ARRAY_AGG(condition) WITHIN GROUP (ORDER BY event_ts DESC))[0] AS condition,
+{% else %}
+    (ARRAY_AGG(condition ORDER BY event_ts DESC))[1] AS condition,
+{% endif %}
     COUNT(*) AS obs_count
 FROM src
 WHERE dqr_valid = TRUE

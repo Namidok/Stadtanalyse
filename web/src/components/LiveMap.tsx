@@ -45,9 +45,11 @@ export function LiveMap({ positions, events, weather, height = 460, center = [52
     <div style={{ position: "relative" }}>
       <div className="map-wrap" style={{ height }}>
         <MapContainer center={center} zoom={12} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+          {/* Standard OSM tiles (no API key); darkened via CSS on .leaflet-tile-pane */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
           />
 
           {weather.map((z) => (

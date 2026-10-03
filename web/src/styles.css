@@ -650,6 +650,11 @@ td.num {
   background: #0b1220;
   font-family: var(--font-body);
 }
+/* Light OSM tiles turned into a dark basemap. Only the tile pane is filtered;
+   markers, weather circles and popups live in other panes and keep their colours. */
+.map-wrap .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.6);
+}
 .leaflet-popup-content-wrapper,
 .leaflet-popup-content {
   background: #10192e !important;

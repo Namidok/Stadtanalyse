@@ -27,19 +27,15 @@ import { StreamBadge, isLiveStream } from "./components/StreamBadge";
 
 const TITLES: Record<Exclude<ViewId, "landing">, string> = {
   overview: "Command Overview",
-  map: "Live Fleet Map",
+  map: "Fleet Map",
   analytics: "Network Analytics",
   ml: "Delay Predictor",
   pipeline: "Data Pipeline",
 };
 
-function Clock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return <span className="clock">{now.toLocaleTimeString()}</span>;
+/** "1:09 PM": time of the last successful data refresh. */
+function updatedAt(): string {
+  return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function PanelHead({ title, hint }: { title: string; hint?: string }) {
@@ -125,7 +121,7 @@ export default function App() {
       setWeatherImpact(wi);
       setEvents(e);
       setPipeline(p);
-      setLastSync(new Date().toLocaleTimeString());
+      setLastSync(updatedAt());
     } catch (err) {
       console.error("refresh failed", err);
       setApiOnline(false);
@@ -152,7 +148,7 @@ export default function App() {
       await api.switchCity(name);
       const cur = await api.cityCurrent();
       setCity(cur);
-      setLastSync(new Date().toLocaleTimeString());
+      setLastSync(updatedAt());
     } catch (err) {
       console.error("switch city failed", err);
     } finally {
@@ -179,8 +175,9 @@ export default function App() {
     return close;
   }, []);
 
-  const source = kpis?.data_source ?? (liveRef.current ? "live-stream" : "warehouse");
   const live = isLiveStream(dataSource, connected && liveRef.current);
+  // "live-stream" only when the API reports live=true; memory mode / not live is a snapshot.
+  const source = live ? "live-stream" : "snapshot";
   // Demo/snapshot build (or API state unknown): no ML model and no city switching.
   const demoMode = dataSource?.memory_mode !== false;
   const vehicles = positions.length || kpis?.vehicles_tracked || 0;
@@ -189,7 +186,8 @@ export default function App() {
     return <Landing kpis={kpis} apiOnline={apiOnline} streaming={connected && liveRef.current} vehicles={vehicles} city={city?.name} dataSource={dataSource} onEnter={() => setView("overview")} />;
   }
 
-  const title = TITLES[view];
+  const mapTitle = live ? "Live Fleet Map" : "Fleet Map";
+  const title = view === "map" ? mapTitle : TITLES[view];
   const mapCenter: [number, number] = [city?.lat ?? 52.52, city?.lon ?? 13.405];
 
   return (
@@ -206,8 +204,7 @@ export default function App() {
           {!demoMode && <CityPicker cities={cities} city={city} disabled={switching} onSelect={switchCity} />}
           {apiOnline !== false && <DataSourceBadge source={dataSource} />}
           <StreamBadge apiOnline={apiOnline} source={dataSource} streaming={connected && liveRef.current} />
-          <span className="clock">{lastSync}</span>
-          <Clock />
+          {lastSync && <span className="clock">Updated {lastSync}</span>}
           <button className="btn btn-ghost btn-sm" onClick={refresh} disabled={refreshing}>
             {refreshing ? "…" : "Refresh"}
           </button>
@@ -251,7 +248,7 @@ export default function App() {
               </div>
               <div className="grid">
                 <div className="panel">
-                  <PanelHead title={`Live Fleet Map · ${city?.name ?? ""}`} hint="weather zones + events" />
+                  <PanelHead title={`${mapTitle} · ${city?.name ?? ""}`} hint="weather zones + events" />
                   <LiveMap key={city?.name ?? "default"} positions={positions} events={events} weather={weather} height={400} center={mapCenter} />
                 </div>
                 <div className="panel">
@@ -267,7 +264,7 @@ export default function App() {
           {view === "map" && (
             <div className="panel" style={{ padding: 0 }}>
               <div className="panel-head" style={{ padding: "18px 18px 6px" }}>
-                <h3>Live Fleet Map · {city?.name ?? ""}</h3>
+                <h3>{mapTitle} · {city?.name ?? ""}</h3>
                 <div className="spacer" />
                 <span className="hint">{positions.length} vehicles · {events.length} events · {weather.length} weather zones</span>
               </div>

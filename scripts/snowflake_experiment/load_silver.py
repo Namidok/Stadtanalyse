@@ -1,10 +1,15 @@
-"""Load real Berlin GTFS-RT trip_updates from local DuckDB into Postgres silver schema."""
+"""Load real Berlin GTFS-RT trip_updates from local DuckDB into Postgres silver schema.
+
+Usage: python scripts/snowflake_experiment/load_silver.py [--duckdb PATH]
+"""
+import argparse
 import json
 import duckdb
 import psycopg2
 from pathlib import Path
 
-DUCKDB_PATH = Path.home() / "Downloads/GitHub/smart-urban-mobility/data/local/realtime.duckdb"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DUCKDB_PATH = REPO_ROOT / "data/local/realtime.duckdb"
 
 PG_CONN = dict(
     host="localhost",
@@ -15,7 +20,12 @@ PG_CONN = dict(
 )
 
 def main():
-    con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
+    ap = argparse.ArgumentParser(description="Load GTFS-RT trip_updates from DuckDB into Postgres silver.trip_updates")
+    ap.add_argument("--duckdb", type=Path, default=DEFAULT_DUCKDB_PATH,
+                    help=f"DuckDB file written by `ingest.realtime.run --local` (default: {DEFAULT_DUCKDB_PATH})")
+    args = ap.parse_args()
+
+    con = duckdb.connect(str(args.duckdb), read_only=True)
     rows = con.execute("SELECT record, event_ts FROM trip_updates").fetchall()
     con.close()
     print(f"Loaded {len(rows)} records from DuckDB")

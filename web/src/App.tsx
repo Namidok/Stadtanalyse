@@ -23,6 +23,7 @@ import { MlPanel } from "./components/MlPanel";
 import { PipelinePanel } from "./components/PipelinePanel";
 import { Gauge } from "./components/Gauge";
 import { Landing } from "./components/Landing";
+import { StreamBadge, isLiveStream } from "./components/StreamBadge";
 
 const TITLES: Record<Exclude<ViewId, "landing">, string> = {
   overview: "Command Overview",
@@ -96,12 +97,14 @@ export default function App() {
   const [city, setCity] = useState<City | null>(null);
   const [dataSource, setDataSource] = useState<DataSource | null>(null);
   const [switching, setSwitching] = useState(false);
+  // null = not checked yet, false = API unreachable (show "Demo API offline", not zeros)
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const liveRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [k, r, t, h, w, wi, e, p] = await Promise.all([
+      const [k, r, t, h, w, wi, e, p, ds] = await Promise.all([
         api.kpis(),
         api.routes(),
         api.trends(24),
@@ -110,7 +113,10 @@ export default function App() {
         api.weatherImpact(),
         api.eventsActive(),
         api.pipeline(),
+        api.dataSource(),
       ]);
+      setApiOnline(true);
+      setDataSource(ds);
       setKpis(k);
       setRoutes(r);
       setTrends(t);
@@ -122,6 +128,7 @@ export default function App() {
       setLastSync(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("refresh failed", err);
+      setApiOnline(false);
     } finally {
       setRefreshing(false);
     }
@@ -136,7 +143,6 @@ export default function App() {
   useEffect(() => {
     api.cities().then((c) => setCities(c.cities)).catch(() => {});
     api.cityCurrent().then((c) => setCity(c)).catch(() => {});
-    api.dataSource().then(setDataSource).catch(() => {});
   }, []);
 
   const switchCity = useCallback(async (name: string) => {
@@ -174,11 +180,13 @@ export default function App() {
   }, []);
 
   const source = kpis?.data_source ?? (liveRef.current ? "live-stream" : "warehouse");
-  const live = connected && liveRef.current;
+  const live = isLiveStream(dataSource, connected && liveRef.current);
+  // Demo/snapshot build (or API state unknown): no ML model and no city switching.
+  const demoMode = dataSource?.memory_mode !== false;
   const vehicles = positions.length || kpis?.vehicles_tracked || 0;
 
   if (view === "landing") {
-    return <Landing kpis={kpis} live={live} vehicles={vehicles} city={city?.name} dataSource={dataSource} onEnter={() => setView("overview")} />;
+    return <Landing kpis={kpis} apiOnline={apiOnline} streaming={connected && liveRef.current} vehicles={vehicles} city={city?.name} dataSource={dataSource} onEnter={() => setView("overview")} />;
   }
 
   const title = TITLES[view];
@@ -186,7 +194,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar view={view} onView={setView} live={live} source={source} vehicles={vehicles} city={city?.name ?? "Berlin"} />
+      <Sidebar view={view} onView={setView} live={live} source={source} vehicles={vehicles} city={city?.name ?? "Berlin"} hideMl={demoMode} />
 
       <div className="main">
         <div className="topbar">
@@ -195,9 +203,9 @@ export default function App() {
             <h1>{title}</h1>
           </div>
           <div className="spacer" />
-          <CityPicker cities={cities} city={city} disabled={switching} onSelect={switchCity} />
-          <DataSourceBadge source={dataSource} />
-          {live ? <span className="pill-live">LIVE STREAM</span> : <span className="pill-snap">warehouse snapshot</span>}
+          {!demoMode && <CityPicker cities={cities} city={city} disabled={switching} onSelect={switchCity} />}
+          {apiOnline !== false && <DataSourceBadge source={dataSource} />}
+          <StreamBadge apiOnline={apiOnline} source={dataSource} streaming={connected && liveRef.current} />
           <span className="clock">{lastSync}</span>
           <Clock />
           <button className="btn btn-ghost btn-sm" onClick={refresh} disabled={refreshing}>
@@ -209,6 +217,13 @@ export default function App() {
         </div>
 
         <div className="content">
+          {apiOnline === false ? (
+            <div className="offline-note">
+              <b>Demo API offline</b>
+              The backend for this demo isn't responding right now, so no figures are shown. It retries every 10 seconds.
+            </div>
+          ) : (
+          <>
           {view === "overview" && (
             <>
               <KpiCard kpis={kpis} live={live} />
@@ -297,8 +312,12 @@ export default function App() {
 
           {view === "ml" && (
             <div className="panel">
-              <PanelHead title="Trip Delay Predictor" hint="XGBoost · trained on the silver warehouse" />
-              <MlPanel />
+              <PanelHead title="Trip Delay Predictor" hint="XGBoost · trained on gold.ml_features" />
+              {demoMode ? (
+                <div className="muted small">The delay model isn't deployed on this demo snapshot. It is trained and served in the full local stack.</div>
+              ) : (
+                <MlPanel />
+              )}
             </div>
           )}
 
@@ -310,13 +329,14 @@ export default function App() {
                   <PipelinePanel pipeline={pipeline} />
                 </div>
                 <div className="panel">
-                  <PanelHead title="Batch Flow" hint="Airflow · 15 min" />
+                  <PanelHead title="Batch Flow" hint="full local stack · Airflow every 15 min (synthetic mode)" />
                   <div className="status-grid" style={{ gridTemplateColumns: "1fr" }}>
                     {[
-                      ["Stream", "Kafka → bronze lakehouse (MinIO)"],
-                      ["Gold", "dbt transforms bronze → silver → gold"],
-                      ["Quality", "Great Expectations suites on gold"],
-                      ["Retrain", "XGBoost delay model on silver Δ"],
+                      ["Bronze", "Spark Structured Streaming: Kafka → Delta on MinIO"],
+                      ["Silver", "Spark batch: Bronze → Silver (Delta + Postgres)"],
+                      ["Quality", "Great Expectations on the Silver exports"],
+                      ["Gold", "dbt → Gold marts in PostgreSQL"],
+                      ["Retrain", "XGBoost delay model on gold.ml_features"],
                     ].map(([k, v]) => (
                       <div className="status-card" key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span className="lbl">{k}</span>
@@ -332,10 +352,13 @@ export default function App() {
               <div className="panel">
                 <PanelHead title="Live Stream Frames" hint="SSE · 1s" />
                 <div className="muted small">
-                  Positions stream is connected {live ? "live via Kafka topic `raw.transport.vehicle.positions`" : "in snapshot mode (DuckDB demo seed)"}. {positions.length} vehicles rendered.
+                  Positions stream is connected {live ? "live via Kafka topic `raw.transport.vehicle.positions`" : "in snapshot mode (DuckDB demo seed)"}. {positions.length} vehicles rendered. Vehicle positions are simulated along the GTFS network.
+                  {demoMode && " On this demo none of the batch steps above run; the server only serves a fixed synthetic snapshot."}
                 </div>
               </div>
             </>
+          )}
+          </>
           )}
         </div>
       </div>

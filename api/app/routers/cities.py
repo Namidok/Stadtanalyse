@@ -11,7 +11,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..config import data_dir
+from ..config import data_dir, settings
 
 router = APIRouter(prefix="/cities", tags=["cities"])
 
@@ -56,6 +56,10 @@ def current_city() -> dict:
 
 @router.post("/switch")
 def switch_city(payload: CitySwitch) -> dict:
+    # The public demo (memory mode) has no producer to re-simulate a new city,
+    # and this endpoint writes to disk without auth, so it is disabled there.
+    if settings()["force_memory_mode"]:
+        raise HTTPException(status_code=403, detail="City switching is disabled on the demo snapshot")
     catalog = _catalog()
     match = next((c for c in catalog if c["name"] == payload.city), None)
     if match is None:

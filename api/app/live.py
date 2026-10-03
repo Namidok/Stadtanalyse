@@ -27,6 +27,9 @@ class LiveStore:
         self.events: dict[str, dict] = {}
         self.counters = {"transport": 0, "trip_updates": 0, "weather": 0, "events": 0}
         self.started_at = time.time()
+        # True only once a message has actually arrived from a Kafka broker
+        # (the offline DuckDB seed also bumps the counters, so they can't be used).
+        self.kafka_connected = False
         self._seeded = False
         self.on_ingest = None  # optional callback(stream_label) for metrics
         self._lock = threading.Lock()
@@ -54,8 +57,10 @@ class LiveStore:
                 for msg in consumer:
                     if self._stop.is_set():
                         break
+                    self.kafka_connected = True
                     self._ingest(msg.topic, msg.value)
             except Exception as e:  # noqa: BLE001
+                self.kafka_connected = False
                 retries += 1
                 if retries == 3:
                     self._seed_local_demo()

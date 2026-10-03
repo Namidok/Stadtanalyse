@@ -21,11 +21,11 @@ stadtanalyse:
       threads: 4
     snowflake:
       type: snowflake
-      account: FIJWPUK-UL40212
-      user: SRIKARKODI
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
       authenticator: programmatic_access_token
       token: "{{ env_var('SNOWFLAKE_PAT') }}"
-      role: ACCOUNTADMIN
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
       database: STADTANALYSE
       warehouse: COMPUTE_WH
       schema: GOLD

@@ -1,51 +1,52 @@
 import type { DataSource, Kpis } from "../api";
 import { NumberTicker } from "./NumberTicker";
+import { StreamBadge } from "./StreamBadge";
 
 const FEATURES: Array<{ icon: string; title: string; desc: string; accent: string }> = [
   {
     icon: "M3 13l3-8 3 8M7 13v6M17 8a3 3 0 1 0 3 3M17 11v8M9 19h8",
-    title: "Live Fleet Tracking",
-    desc: "Vehicle positions stream in over Kafka and render in real time on an interactive city map — every bus, tram and rail unit across the city.",
+    title: "Fleet Map",
+    desc: "Simulated vehicle positions, moved along the real GTFS network, stream over Kafka onto an interactive city map. GTFS-RT carries trip delays, not GPS positions.",
     accent: "#22d3ee",
   },
   {
     icon: "M3 3v18h18M7 13v3M12 9v7M17 5v11",
     title: "Delay Analytics",
-    desc: "Network-wide punctuality, congestion hotspots, route reliability and weather impact — computed from a modern lakehouse in seconds.",
+    desc: "Punctuality, route reliability and hotspots from real GTFS-RT trip delays (realtime.gtfs.de). Weather and event impact use simulated weather and events.",
     accent: "#818cf8",
   },
   {
     icon: "M20 6 9 17l-5-5",
     title: "Delay Predictor",
-    desc: "An XGBoost model trained on warehouse data predicts trip delays from weather, time of day, mode and city events.",
+    desc: "An XGBoost model trained on the dbt gold.ml_features table, evaluated on a time-based split against simple baselines. Runs in the full local stack, not on this demo.",
     accent: "#34d399",
   },
   {
     icon: "M4 6h16M4 10h16M4 14h10M4 18h6",
     title: "Lakehouse Pipeline",
-    desc: "Kafka streams land in a MinIO data lake, are refined by Spark into a silver layer, then modeled with dbt into gold for analytics.",
+    desc: "Spark Structured Streaming lands Kafka topics in Bronze Delta tables on MinIO, a Spark batch job builds Silver, and dbt builds Gold marts in PostgreSQL.",
     accent: "#fbbf24",
   },
   {
     icon: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3Z",
-    title: "Data Quality Gates",
-    desc: "Great Expectations suites validate every batch before gold data is served — keeping analytics trustworthy end to end.",
+    title: "Data Quality Checks",
+    desc: "Great Expectations suites validate the Silver exports in the full local pipeline (make jobs / Airflow). They do not run on this public demo.",
     accent: "#f472b6",
   },
   {
     icon: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20ZM3.6 9h16.8M3.6 15h16.8M12 2a14 14 0 0 1 0 20M12 2a14 14 0 0 0 0 20",
     title: "Observability",
-    desc: "Prometheus metrics and Grafana dashboards watch the pipeline, brokers and exporters — the platform monitors itself.",
+    desc: "In the full local stack, Prometheus scrapes the API and Kafka, Postgres and node exporters, and Grafana shows a platform dashboard. Not deployed on this demo.",
     accent: "#a78bfa",
   },
 ];
 
 const STAGES: Array<{ label: string; sub: string; accent: string }> = [
-  { label: "Simulators", sub: "GTFS + Kafka producers", accent: "#22d3ee" },
-  { label: "Bronze", sub: "MinIO object lake", accent: "#38bdf8" },
-  { label: "Silver", sub: "Spark ETL", accent: "#818cf8" },
-  { label: "Gold", sub: "dbt models", accent: "#a78bfa" },
-  { label: "Postgres", sub: "analytics store", accent: "#f472b6" },
+  { label: "Sources", sub: "GTFS-RT + simulators", accent: "#22d3ee" },
+  { label: "Kafka", sub: "4 raw topics", accent: "#38bdf8" },
+  { label: "Bronze", sub: "Delta on MinIO", accent: "#38bdf8" },
+  { label: "Silver", sub: "Spark batch → Delta", accent: "#818cf8" },
+  { label: "Gold", sub: "dbt → Postgres", accent: "#a78bfa" },
   { label: "Serve", sub: "API + dashboard", accent: "#34d399" },
 ];
 
@@ -60,13 +61,13 @@ function Stat({ value, suffix, label, decimals }: { value: number; suffix: strin
   );
 }
 
-export function Landing({ kpis, live, vehicles, city, dataSource, onEnter }: { kpis: Kpis | null; live: boolean; vehicles: number; city?: string; dataSource: DataSource | null; onEnter: () => void }) {
+export function Landing({ kpis, apiOnline, streaming, vehicles, city, dataSource, onEnter }: { kpis: Kpis | null; apiOnline: boolean | null; streaming: boolean; vehicles: number; city?: string; dataSource: DataSource | null; onEnter: () => void }) {
   return (
     <div className="landing">
       <div className="land-hero">
         <div className="land-badge">
-          {live ? <span className="pill-live">LIVE · KAFKA STREAM{city ? ` · ${city.toUpperCase()}` : ""}</span> : <span className="pill-snap">DEMO SNAPSHOT</span>}
-          {dataSource && (
+          <StreamBadge apiOnline={apiOnline} source={dataSource} streaming={streaming} city={city} />
+          {apiOnline !== false && dataSource && (
             <span className={`pill-source ${dataSource.mode === "real" ? "real" : "synth"}`} title={dataSource.detail}>
               {dataSource.label}
             </span>
@@ -89,7 +90,7 @@ export function Landing({ kpis, live, vehicles, city, dataSource, onEnter }: { k
         <h1 className="land-title">
           Stadt<em>analyse</em>
         </h1>
-        <p className="land-sub">A smart urban-mobility analytics platform. It ingests live transit telemetry, stores it in a modern data lake, and turns raw streams into delay analytics and machine-learning predictions.</p>
+        <p className="land-sub">A smart urban-mobility analytics platform. It streams real GTFS-RT trip delays from realtime.gtfs.de, plus simulated vehicle positions, weather and city events, through Kafka into a Delta Lake, and turns them into delay analytics and a delay-prediction model.</p>
 
         <div className="land-cta">
           <button className="btn land-btn" onClick={onEnter}>
@@ -103,12 +104,19 @@ export function Landing({ kpis, live, vehicles, city, dataSource, onEnter }: { k
           </button>
         </div>
 
-        <div className="land-stats">
-          <Stat value={vehicles || kpis?.vehicles_tracked || 0} suffix="" label="vehicles tracked" />
-          <Stat value={kpis?.on_time_pct ?? 0} suffix="%" label="on-time rate" decimals={1} />
-          <Stat value={kpis?.avg_delay_seconds ?? 0} suffix="s" label="avg delay" />
-          <Stat value={kpis?.active_events ?? 0} suffix="" label="active events" />
-        </div>
+        {apiOnline === false ? (
+          <div className="offline-note">
+            <b>Demo API offline</b>
+            The backend for this demo isn't responding right now, so no figures are shown. The full pipeline runs locally with Docker Compose; see the README.
+          </div>
+        ) : (
+          <div className="land-stats">
+            <Stat value={vehicles || kpis?.vehicles_tracked || 0} suffix="" label="vehicles tracked" />
+            <Stat value={kpis?.on_time_pct ?? 0} suffix="%" label="on-time rate" decimals={1} />
+            <Stat value={kpis?.avg_delay_seconds ?? 0} suffix="s" label="avg delay" />
+            <Stat value={kpis?.active_events ?? 0} suffix="" label="active events" />
+          </div>
+        )}
       </div>
 
       <div id="land-features" className="land-section">
@@ -144,17 +152,20 @@ export function Landing({ kpis, live, vehicles, city, dataSource, onEnter }: { k
           ))}
         </div>
         <p className="land-flow-note">
-          {dataSource?.mode === "real"
-            ? "Real German transit data: the national gtfs.de network is extracted per city and live GTFS-RT delays from realtime.gtfs.de stream into Kafka. Vehicle positions are simulated along the real routes. Raw events land in the MinIO Bronze lake, Spark refines them to Silver, dbt models Gold, and Postgres serves the FastAPI backend and this dashboard."
-            : "Simulators push transit, weather and event streams to Kafka. Raw events land in the MinIO Bronze lake, Spark refines them to Silver, dbt models Gold, and Postgres serves the FastAPI backend and this dashboard. A scheduled Airflow DAG re-runs ETL, quality checks, and the ML retrain."}
+          Full local pipeline: real GTFS-RT trip delays from realtime.gtfs.de (polled every 20 s) plus simulated vehicle positions, weather and events flow through 4 Kafka topics. Spark Structured Streaming writes Bronze Delta tables on MinIO, a Spark batch job builds Silver, Great Expectations checks the Silver exports, dbt builds Gold marts in PostgreSQL, and XGBoost retrains on gold.ml_features. In the synthetic local mode an Airflow DAG runs these batch steps every 15 minutes.
         </p>
+        {dataSource?.memory_mode && (
+          <p className="land-flow-note">
+            This public demo is a snapshot: the API serves a fixed, synthetic DuckDB sample from memory. No Kafka, Spark, Postgres, Great Expectations or ML model runs on this server.
+          </p>
+        )}
       </div>
 
       <div className="land-footer">
         <button className="btn land-btn" onClick={onEnter}>
           Launch the dashboard
         </button>
-        <div className="land-foot-note">Stadtanalyse · Kafka → MinIO → Spark → dbt → Postgres · FastAPI + React · Airflow · Prometheus &amp; Grafana</div>
+        <div className="land-foot-note">Stadtanalyse · Kafka → Spark → Delta on MinIO → dbt → Postgres · FastAPI + React · Airflow · Prometheus &amp; Grafana (full local stack)</div>
       </div>
     </div>
   );

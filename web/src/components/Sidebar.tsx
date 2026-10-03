@@ -76,6 +76,7 @@ export function Sidebar({
   source,
   vehicles,
   city,
+  hideMl = false,
 }: {
   view: ViewId;
   onView: (v: ViewId) => void;
@@ -83,7 +84,9 @@ export function Sidebar({
   source: string;
   vehicles: number;
   city: string;
+  hideMl?: boolean;
 }) {
+  const dash = hideMl ? DASH.filter((it) => it.id !== "ml") : DASH;
   return (
     <aside className="sidebar">
       <div className="brand" onClick={() => onView("landing")}>
@@ -112,7 +115,7 @@ export function Sidebar({
       <div className="nav-section">Workspace</div>
       <NavList items={NAV} view={view} onView={onView} />
       <div className="nav-section">Dashboard</div>
-      <NavList items={DASH} view={view} onView={onView} />
+      <NavList items={dash} view={view} onView={onView} />
 
       <div className="spacer" />
 

@@ -13,11 +13,14 @@ venv/
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
 
 # dbt
 dbt/project/target/
 dbt/project/logs/
 dbt/project/dbt_packages/
+dbt/logs/
+dbt/profiles/.user.yml
 
 # ML artifacts
 ml/model/*.joblib

@@ -1,9 +1,14 @@
-"""Load real Berlin GTFS static files into Postgres gtfs_raw schema."""
+"""Load real Berlin GTFS static files into Postgres gtfs_raw schema.
+
+Usage: python scripts/snowflake_experiment/load_gtfs_raw.py [--gtfs-dir PATH]
+"""
+import argparse
 import csv
 import psycopg2
 from pathlib import Path
 
-GTFS_DIR = Path.home() / "Downloads/GitHub/smart-urban-mobility/data/gtfs"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_GTFS_DIR = REPO_ROOT / "data/gtfs"
 
 PG_CONN = dict(
     host="localhost", port=5432, dbname="stadtanalyse",
@@ -16,6 +21,11 @@ def load_csv(path, cols):
         return [tuple(row.get(c, "") for c in cols) for row in reader]
 
 def main():
+    ap = argparse.ArgumentParser(description="Load GTFS static files into Postgres gtfs_raw")
+    ap.add_argument("--gtfs-dir", type=Path, default=DEFAULT_GTFS_DIR,
+                    help=f"Directory with stops/routes/trips/stop_times.txt (default: {DEFAULT_GTFS_DIR})")
+    gtfs_dir = ap.parse_args().gtfs_dir
+
     pg = psycopg2.connect(**PG_CONN)
     cur = pg.cursor()
     cur.execute("CREATE SCHEMA IF NOT EXISTS gtfs_raw;")
@@ -28,7 +38,7 @@ def main():
             stop_id TEXT NOT NULL, stop_name TEXT, stop_lat TEXT, stop_lon TEXT, stop_zone TEXT
         );
     """)
-    rows = load_csv(GTFS_DIR / "stops.txt", ["stop_id", "stop_name", "stop_lat", "stop_lon", "stop_zone"])
+    rows = load_csv(gtfs_dir / "stops.txt", ["stop_id", "stop_name", "stop_lat", "stop_lon", "stop_zone"])
     execute_values(cur, "INSERT INTO gtfs_raw.gtfs_stops VALUES %s", rows)
     print(f"gtfs_stops: {len(rows)} rows")
 
@@ -38,7 +48,7 @@ def main():
             route_id TEXT NOT NULL, route_mode TEXT, route_short_name TEXT, route_long_name TEXT
         );
     """)
-    rows = load_csv(GTFS_DIR / "routes.txt", ["route_id", "route_mode", "route_short_name", "route_long_name"])
+    rows = load_csv(gtfs_dir / "routes.txt", ["route_id", "route_mode", "route_short_name", "route_long_name"])
     execute_values(cur, "INSERT INTO gtfs_raw.gtfs_routes VALUES %s", rows)
     print(f"gtfs_routes: {len(rows)} rows")
 
@@ -48,7 +58,7 @@ def main():
             trip_id TEXT NOT NULL, route_id TEXT, service_id TEXT, direction_id TEXT, trip_headsign TEXT
         );
     """)
-    rows = load_csv(GTFS_DIR / "trips.txt", ["trip_id", "route_id", "service_id", "direction_id", "trip_headsign"])
+    rows = load_csv(gtfs_dir / "trips.txt", ["trip_id", "route_id", "service_id", "direction_id", "trip_headsign"])
     execute_values(cur, "INSERT INTO gtfs_raw.gtfs_trips VALUES %s", rows)
     print(f"gtfs_trips: {len(rows)} rows")
 
@@ -59,7 +69,7 @@ def main():
             arrival_time TEXT, departure_time TEXT
         );
     """)
-    with open(GTFS_DIR / "stop_times.txt", newline="", encoding="utf-8") as f:
+    with open(gtfs_dir / "stop_times.txt", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = []
         for i, row in enumerate(reader):

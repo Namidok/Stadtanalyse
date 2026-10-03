@@ -144,6 +144,9 @@ export interface DataSource {
   mode: "real" | "synthetic";
   label: string;
   detail: string;
+  memory_mode?: boolean;
+  kafka_connected?: boolean;
+  live?: boolean;
 }
 
 async function get<T>(path: string): Promise<T> {

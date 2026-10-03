@@ -11,15 +11,27 @@ router = APIRouter(tags=["meta"])
 @router.get("/data-source")
 def data_source():
     """Where the demo data comes from: 'real' (national gtfs.de GTFS + live
-    GTFS-RT delays, positions simulated on the real network) or 'synthetic'."""
+    GTFS-RT delays; positions, weather and events simulated) or 'synthetic'.
+
+    `live` is true only for real data arriving over Kafka right now; the
+    dashboard uses it to decide between the LIVE and DEMO SNAPSHOT badges."""
     mode = settings()["data_source"]
+    memory_mode = settings()["force_memory_mode"]
+    if memory_mode:
+        detail = ("Demo snapshot: a fixed, synthetic DuckDB sample served from memory. "
+                  "No Kafka, Spark, Postgres or ML model runs on this server.")
+    elif mode == "real":
+        detail = ("National GTFS (gtfs.de) network + live GTFS-RT trip delays "
+                  "(realtime.gtfs.de); vehicle positions, weather and events are simulated.")
+    else:
+        detail = "Fully simulated network, positions, delays, weather and events (no real feeds)."
     return {
         "mode": mode,
-        "label": "REAL GTFS + REALTIME DELAYS" if mode == "real" else "SYNTHETIC DATA",
-        "detail": ("National GTFS (gtfs.de) network + live GTFS-RT delays "
-                   "(realtime.gtfs.de); vehicle positions simulated on the real network."
-                   if mode == "real" else
-                   "Fully simulated network, positions and delays (no real feeds)."),
+        "label": "REAL GTFS-RT DELAYS" if mode == "real" and not memory_mode else "SYNTHETIC DATA",
+        "detail": detail,
+        "memory_mode": memory_mode,
+        "kafka_connected": live_store.kafka_connected,
+        "live": mode == "real" and not memory_mode and live_store.kafka_connected,
     }
 
 
@@ -29,7 +41,7 @@ def health():
     return {
         "status": "ok",
         "warehouse_mode": provider.mode,
-        "kafka_connected": live_store.counters["transport"] > 0,
+        "kafka_connected": live_store.kafka_connected,
         "vehicles_tracked": len(live_store.latest_positions),
         "ml_loaded": delay_model.loaded,
     }

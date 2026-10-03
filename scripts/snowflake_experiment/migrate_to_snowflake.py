@@ -1,12 +1,13 @@
-"""Migrate silver.* and gtfs_raw.* tables from Postgres into Snowflake STADTANALYSE db."""
+"""Migrate silver.* and gtfs_raw.* tables from Postgres into Snowflake STADTANALYSE db.
+
+Requires SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_ROLE and SNOWFLAKE_PAT in the environment.
+"""
 import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
 PG_URL = "postgresql+psycopg2://stadtanalyse:stadtanalyse-secret@localhost:5432/stadtanalyse"
 
-SF_ACCOUNT = "FIJWPUK-UL40212"
-SF_USER = "SRIKARKODI"
 SF_DATABASE = "STADTANALYSE"
 SF_WAREHOUSE = "COMPUTE_WH"
 
@@ -23,11 +24,14 @@ TABLES = [
 
 def main():
     pat = os.environ["SNOWFLAKE_PAT"]
+    sf_account = os.environ["SNOWFLAKE_ACCOUNT"]
+    sf_user = os.environ["SNOWFLAKE_USER"]
+    sf_role = os.environ["SNOWFLAKE_ROLE"]
     pg_engine = create_engine(PG_URL)
 
     sf_url = (
-        f"snowflake://{SF_USER}:@{SF_ACCOUNT}/{SF_DATABASE}/?"
-        f"warehouse={SF_WAREHOUSE}&role=ACCOUNTADMIN&authenticator=programmatic_access_token"
+        f"snowflake://{sf_user}:@{sf_account}/{SF_DATABASE}/?"
+        f"warehouse={SF_WAREHOUSE}&role={sf_role}&authenticator=programmatic_access_token"
     )
     sf_engine = create_engine(sf_url, connect_args={"token": pat, "authenticator": "programmatic_access_token"})
 

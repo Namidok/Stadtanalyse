@@ -176,7 +176,7 @@ export function MlPanel() {
             )}
             <div className="model-foot">
               <span className="pill ok">model loaded</span>
-              <span className="faint small">XGBoost · silver warehouse</span>
+              <span className="faint small">XGBoost · gold.ml_features</span>
             </div>
           </>
         )}

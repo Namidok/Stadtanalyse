@@ -72,7 +72,7 @@ web-local: ## Run React dev server locally
 	cd web && npm install && npm run dev
 
 ml-local: ## Train the delay model locally on generated data
-	python3 -m venv .venv && .venv/bin/pip install -q -r ml/requirements.txt && \
+	python3 -m venv .venv && .venv/bin/pip install -q -r api/requirements.txt -r ingest/requirements.txt && \
 	.venv/bin/python -m ingest.producer.run --local && .venv/bin/python ml/train/train_delay_model.py --local
 
 test: ## Run test suite
